@@ -824,6 +824,133 @@ FTN_GET_PARTITION_PLACE_NUMS( int *place_nums ) {
         }
     #endif
 }
+
+/** OpenMP Interoperability */
+void FTN_STDCALL
+FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
+{
+    if (wait_policy == omp_thread_state_SPINNING) { /* ACTIVE */
+        __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
+        __kmp_yield_init = 0;
+        __kmp_yield_next = 0;
+        __kmp_library = library_turnaround;
+        __kmp_aux_set_library(__kmp_library);
+        omp_wait_policy = omp_thread_state_SPINNING;
+    } else if ( wait_policy == omp_wait_policy_YIELD ) {
+        __kmp_yield_init = KMP_MAX_INIT_WAIT;
+        __kmp_yield_next = KMP_MAX_NEXT_WAIT;
+        __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* if we yield long enough, we should sleep */
+        __kmp_library = library_turnaround;
+        __kmp_aux_set_library(__kmp_library);
+        omp_wait_policy = omp_thread_state_YIELD;
+    } else if ( wait_policy == omp_wait_policy_SLEEP ) { /* PASSIVE */
+        __kmp_dflt_blocktime = 0; /* this override the env setting if any */
+        __kmp_yield_init = 0;
+        __kmp_yield_next = 0;
+        __kmp_library = library_throughput;
+        __kmp_aux_set_library(__kmp_library);
+        omp_wait_policy = omp_thread_state_SLEEP;
+    }
+}
+
+int FTN_STDCALL
+FTN_GET_WAIT_POLICY( void )
+{
+    return omp_wait_policy;
+}
+
+int FTN_STDCALL
+FTN_QUIESCE( omp_thread_state_t quiesce_state ) {
+    if (quiesce_state == omp_wait_policy_SLEEP || quiesce_state == omp_wait_policy_SPINNING ||
+        quiesce_state == omp_wait_policy_YIELD) {
+        FTN_SET_WAIT_POLICY(quiesce_state);
+    } else if (quiesce_state == omp_wait_policy_KILL) {
+        __kmp_internal_end_fini();
+    } else {
+        return 1;
+    }
+
+    // int a = __kmp_gtid_get_specific();
+    // printf("gid %d*********", a);
+    // __kmp_internal_end_thread( -1 ); // seems doesn't work
+    // void *exit_val;
+    // kmp_info_t * thread = __kmp_threads[2];
+    // pthread_kill(2, 0 );
+    // __kmp_reap_worker( thread );
+    // __kmp_reap_team( thread->th.th_serial_team );
+    // thread->th.th_serial_team = NULL;
+    // __kmp_free( thread );
+    // KMP_MB();
+    // pthread_join( thread->th.th_info.ds.ds_thread, & exit_val);
+    // printf("done\n");
+
+    // __kmp_cleanup();
+    // __kmp_free( __kmp_threads );
+    // a = __kmp_gtid_get_specific();
+    // printf("gid %d*********", a);
+    // __kmp_unregister_root_current_thread(0);
+    // KMP_MB();
+    // __kmp_global.g.g_abort = -1;
+    // TCW_SYNC_4(__kmp_global.g.g_done, TRUE);
+    return 0;
+}
+
+int FTN_STDCALL
+FTN_THREAD_CREATE( omp_thread_t * th, int place, void *(*start_routine)(void *), void *arg, void * new_stack )
+{
+    return __kmp_omp_thread_create(th, place, start_routine, arg, new_stack);
+}
+
+void FTN_STDCALL
+FTN_THREAD_EXIT( void * value_ptr )
+{
+    // __kmp_free_team( kmp_root_t *root, kmp_team_t *team  USE_NESTED_HOT_ARG(kmp_info_t *master) );
+    int idd = __kmp_get_global_thread_id();
+
+    omp_thread_t * thr = (omp_thread_t*)__kmp_threads[idd]->th.interop_thr;
+    thr->rtval = value_ptr;
+    thr->join_counter = 1;
+    return;
+}
+
+int FTN_STDCALL
+FTN_THREAD_JOIN( omp_thread_t * thread, void **value_ptr )
+{
+    while (thread->join_counter == 0);
+    (*value_ptr) = thread->rtval;
+    return 0;
+}
+
+int FTN_STDCALL
+FTN_THREAD_ATTACH( omp_runtime_handle_t runtime, int place, void * new_stack, int * term_flag )
+{
+    return 0;
+}
+
+omp_thread_t * FTN_STDCALL
+FTP_GET_INITIAL_THREAD( )
+{
+    return NULL;
+}
+
+omp_runtime_handle_t FTN_STDCALL
+FTN_GET_RUNTIME_HANDLE( void )
+{
+    return omp_runtime_handle;
+}
+
+int FTN_STDCALL
+FTN_GET_NUM_THREADS_RUNTIME( omp_thread_state_t state )
+{
+    return 0;
+}
+int FTN_STDCALL
+FTN_TASK_CREATE( omp_task_t * t, void *(*task_func)(void *), void * task_args, int (*task_test_func)(omp_task_t),
+                 int *intags, int num_intags, int * outtags, int num_outtags )
+{
+   return 0;
+}
+
 #endif
 
 int FTN_STDCALL

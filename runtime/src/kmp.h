@@ -2460,6 +2460,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 #if KMP_STATS_ENABLED
     kmp_stats_list* th_stats;
 #endif
+    void * interop_thr;
 } kmp_base_info_t;
 
 typedef union KMP_ALIGN_CACHE kmp_info {
@@ -3627,6 +3628,35 @@ typedef enum omp_sched_t {
     omp_sched_auto    = 4
 } omp_sched_t;
 typedef void * kmp_affinity_mask_t;
+
+typedef enum omp_thread_state {
+    omp_thread_state_RUNNING = 0,     /* doing useful work */
+    omp_thread_state_SPINNING = 1,    /* busy waiting (SPINNING) for work */
+    omp_thread_state_YIELD = 3,       /* yield the CPU */
+    omp_thread_state_SLEEP = 4,       /* sleeping */
+    omp_thread_state_KILLED = 5,      /* being killed */
+
+    omp_wait_policy_ACTIVE = omp_thread_state_SPINNING, /* ACTIVE is SPINNING */
+    omp_wait_policy_PASSIVE = omp_thread_state_SLEEP,   /* PASSIVE is either YIELD or SLEEP */
+} omp_thread_state_t;
+
+
+typedef struct omp_thread {
+    void *(*start_routine)(void *);
+    void *arg;
+    void * new_stack;
+    volatile int join_counter;
+    void * rtval;
+} omp_thread_t;
+typedef struct omp_task omp_task_t;
+typedef void * omp_runtime_handle_t;
+
+/* the gloal variable (ICV) for the wait policy, thus omp_set_wait_policy can only be called in sequential region */
+extern omp_thread_state_t omp_wait_policy; /* defined in kmp_global.c */
+extern omp_runtime_handle_t omp_runtime_handle;
+
+extern int __kmp_omp_thread_create( omp_thread_t * th, int place, void *(*start_routine)(void *), void *arg, void * new_stack );
+
 #endif
 
 KMP_EXPORT void KMPC_CONVENTION ompc_set_max_active_levels(int);

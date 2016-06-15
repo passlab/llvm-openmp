@@ -264,6 +264,8 @@ int __kmp_place_num_threads_per_core = 0;
 kmp_tasking_mode_t __kmp_tasking_mode = tskm_task_teams;
 #if OMP_45_ENABLED
 kmp_int32 __kmp_max_task_priority = 0;
+omp_thread_state_t omp_wait_policy = omp_wait_policy_ACTIVE;
+omp_runtime_handle_t omp_runtime_handle = (void*) & __kmp_threads;
 #endif
 
 /* This check ensures that the compiler is passing the correct data type
