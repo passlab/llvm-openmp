@@ -3630,13 +3630,13 @@ typedef enum omp_sched_t {
 typedef void * kmp_affinity_mask_t;
 
 typedef enum omp_thread_state {
-    omp_thread_state_RUNNING = 0,     /* doing useful work */
-    omp_thread_state_SPINNING = 1,    /* busy waiting (SPINNING) for work */
+    omp_thread_state_RUN = 0,     /* doing useful work */
+    omp_thread_state_SPIN = 1,    /* busy waiting (SPIN) for work */
     omp_thread_state_YIELD = 3,       /* yield the CPU */
     omp_thread_state_SLEEP = 4,       /* sleeping */
-    omp_thread_state_KILLED = 5,      /* being killed */
+    omp_thread_state_KILL = 5,      /* being killed */
 
-    omp_wait_policy_ACTIVE = omp_thread_state_SPINNING, /* ACTIVE is SPINNING */
+    omp_wait_policy_ACTIVE = omp_thread_state_SPIN, /* ACTIVE is SPIN */
     omp_wait_policy_PASSIVE = omp_thread_state_SLEEP,   /* PASSIVE is either YIELD or SLEEP */
 } omp_thread_state_t;
 

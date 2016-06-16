@@ -829,21 +829,21 @@ FTN_GET_PARTITION_PLACE_NUMS( int *place_nums ) {
 void FTN_STDCALL
 FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
 {
-    if (wait_policy == omp_thread_state_SPINNING) { /* ACTIVE */
+    if (wait_policy == omp_thread_state_SPIN) { /* ACTIVE */
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
         __kmp_yield_init = 0;
         __kmp_yield_next = 0;
         __kmp_library = library_turnaround;
         __kmp_aux_set_library(__kmp_library);
-        omp_wait_policy = omp_thread_state_SPINNING;
-    } else if ( wait_policy == omp_wait_policy_YIELD ) {
+        omp_wait_policy = omp_thread_state_SPIN;
+    } else if ( wait_policy == omp_thread_state_YIELD ) {
         __kmp_yield_init = KMP_MAX_INIT_WAIT;
         __kmp_yield_next = KMP_MAX_NEXT_WAIT;
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* if we yield long enough, we should sleep */
         __kmp_library = library_turnaround;
         __kmp_aux_set_library(__kmp_library);
         omp_wait_policy = omp_thread_state_YIELD;
-    } else if ( wait_policy == omp_wait_policy_SLEEP ) { /* PASSIVE */
+    } else if ( wait_policy == omp_thread_state_SLEEP ) { /* PASSIVE */
         __kmp_dflt_blocktime = 0; /* this override the env setting if any */
         __kmp_yield_init = 0;
         __kmp_yield_next = 0;
@@ -861,10 +861,10 @@ FTN_GET_WAIT_POLICY( void )
 
 int FTN_STDCALL
 FTN_QUIESCE( omp_thread_state_t quiesce_state ) {
-    if (quiesce_state == omp_wait_policy_SLEEP || quiesce_state == omp_wait_policy_SPINNING ||
-        quiesce_state == omp_wait_policy_YIELD) {
+    if (quiesce_state == omp_thread_state_SLEEP || quiesce_state == omp_thread_state_SPIN ||
+        quiesce_state == omp_thread_state_YIELD) {
         FTN_SET_WAIT_POLICY(quiesce_state);
-    } else if (quiesce_state == omp_wait_policy_KILL) {
+    } else if (quiesce_state == omp_thread_state_KILL) {
         __kmp_internal_end_fini();
     } else {
         return 1;
@@ -928,7 +928,7 @@ FTN_THREAD_ATTACH( omp_runtime_handle_t runtime, int place, void * new_stack, in
 }
 
 omp_thread_t * FTN_STDCALL
-FTP_GET_INITIAL_THREAD( )
+FTN_GET_INITIAL_THREAD( )
 {
     return NULL;
 }
