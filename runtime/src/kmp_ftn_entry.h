@@ -975,9 +975,9 @@ FTN_GET_NUM_THREADS_RUNTIME( omp_thread_state_t state )
 }
 
 int FTN_STDCALL
-FTN_GET_GLOBAL_NUM_THREADS( omp_thread_state_t state )
+FTN_GET_GLOBAL_NUM_THREADS( )
 {
-    return FTN_GET_NUM_THREADS_RUNTIME(state);
+    return FTN_GET_NUM_THREADS_RUNTIME(omp_thread_state_ANY);
 }
 
 int FTN_STDCALL

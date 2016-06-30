@@ -217,7 +217,7 @@
     extern omp_thread_t * __KAI_KMPC_CONVENTION omp_get_initial_thread();
     extern omp_runtime_handle_t    __KAI_KMPC_CONVENTION  omp_get_runtime_handle(void);
     extern int    __KAI_KMPC_CONVENTION  omp_get_num_threads_runtime(omp_thread_state_t state);
-    extern int    __KAI_KMPC_CONVENTION  omp_get_global_num_threads(omp_thread_state_t state);
+    extern int    __KAI_KMPC_CONVENTION  omp_get_global_num_threads();
     extern int    __KAI_KMPC_CONVENTION  omp_get_global_thread_num();
     extern int __KAI_KMPC_CONVENTION    omp_task_create(omp_task_t * t, void *(*task_func)(void *), void * task_args, int (*task_test_func)(omp_task_t),
                          int *intags, int num_intags, int * outtags, int num_outtags);
