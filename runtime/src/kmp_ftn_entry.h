@@ -854,10 +854,10 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
             for ( i = 0; i < __kmp_threads_capacity; i++ ) {
                 kmp_info_t * thread = __kmp_threads[ i ];
                 if ( thread == NULL ) break;
-		thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
+		        thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
                 if (i == gtid) continue;
                 /* this approach does not work, segfault */
-		//kmp_flag_64 flag(&thread->th.th_bar[ bs_forkjoin_barrier ].bb.b_go, thread);
+		        //kmp_flag_64 flag(&thread->th.th_bar[ bs_forkjoin_barrier ].bb.b_go, thread);
                 //__kmp_release_64(&flag);
 
                 volatile void *sleep_loc;
@@ -912,29 +912,6 @@ FTN_QUIESCE( omp_thread_state_t quiesce_state ) {
     } else {
         return 1;
     }
-
-    // int a = __kmp_gtid_get_specific();
-    // printf("gid %d*********", a);
-    // __kmp_internal_end_thread( -1 ); // seems doesn't work
-    // void *exit_val;
-    // kmp_info_t * thread = __kmp_threads[2];
-    // pthread_kill(2, 0 );
-    // __kmp_reap_worker( thread );
-    // __kmp_reap_team( thread->th.th_serial_team );
-    // thread->th.th_serial_team = NULL;
-    // __kmp_free( thread );
-    // KMP_MB();
-    // pthread_join( thread->th.th_info.ds.ds_thread, & exit_val);
-    // printf("done\n");
-
-    // __kmp_cleanup();
-    // __kmp_free( __kmp_threads );
-    // a = __kmp_gtid_get_specific();
-    // printf("gid %d*********", a);
-    // __kmp_unregister_root_current_thread(0);
-    // KMP_MB();
-    // __kmp_global.g.g_abort = -1;
-    // TCW_SYNC_4(__kmp_global.g.g_done, TRUE);
     return 0;
 }
 
@@ -967,7 +944,7 @@ FTN_THREAD_JOIN( omp_thread_t * thread, void **value_ptr )
 int FTN_STDCALL
 FTN_THREAD_ATTACH( omp_runtime_handle_t runtime, int place, void * new_stack, int * term_flag )
 {
-    return 0;
+    return -1;
 }
 
 omp_thread_t * FTN_STDCALL
@@ -988,18 +965,19 @@ FTN_GET_NUM_THREADS_RUNTIME( omp_thread_state_t state )
     int i;
     int num = 0;
     for ( i = 0; i < __kmp_threads_capacity; i++ ) {
-        kmp_info_t * thread = __kmp_threads[ i ];
-        if ( thread == NULL ) break;
-        thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
-        if (i == gtid) continue;
+        kmp_info_t *thread = __kmp_threads[i];
+        if (thread == NULL) break;
+        if (thread->th.wait_state == state) num++;
+    }
 
-        return 0;
+    if (state == omp_thread_state_ANY) return i;
+    else return num;
 }
 
 int FTN_STDCALL
 FTN_GET_GLOBAL_NUM_THREADS( omp_thread_state_t state )
 {
-    return 0;
+    return FTN_GET_NUM_THREADS_RUNTIME(state);
 }
 
 int FTN_STDCALL
