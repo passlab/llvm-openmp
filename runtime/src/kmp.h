@@ -3642,6 +3642,7 @@ typedef enum omp_thread_state {
 
     OMP_ACTIVE_WAIT = omp_thread_state_SPIN, /* ACTIVE is SPIN */
     OMP_PASSIVE_WAIT = omp_thread_state_SLEEP,   /* PASSIVE is either YIELD or SLEEP */
+    omp_thread_state_ANY = 999,
 } omp_thread_state_t;
 
 

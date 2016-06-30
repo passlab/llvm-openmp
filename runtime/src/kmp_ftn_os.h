@@ -144,6 +144,8 @@
     #define FTN_GET_INITIAL_THREAD               omp_get_initial_thread
     #define FTN_GET_RUNTIME_HANDLE               omp_get_runtime_handle
     #define FTN_GET_NUM_THREADS_RUNTIME          omp_get_num_threads_runtime
+    #define FTN_GET_GLOBAL_NUM_THREADS           omp_get_global_num_threads
+    #define FTN_GET_GLOBAL_THREAD_NUM            omp_get_global_thread_num
     #define FTN_TASK_CREATE                      omp_task_create
 
 #endif
@@ -275,6 +277,8 @@
     #define FTN_GET_INITIAL_THREAD               omp_get_initial_thread_
     #define FTN_GET_RUNTIME_HANDLE               omp_get_runtime_handle_
     #define FTN_GET_NUM_THREADS_RUNTIME          omp_get_num_threads_runtime_
+    #define FTN_GET_GLOBAL_NUM_THREADS           omp_get_global_num_threads_
+    #define FTN_GET_GLOBAL_THREAD_NUM            omp_get_global_thread_num_
     #define FTN_TASK_CREATE                      omp_task_create_
 #endif
 
@@ -403,7 +407,12 @@
     #define FTN_THREAD_EXIT                      FTN_THREAD_EXIT
     #define FTN_THREAD_JOIN                      FTN_THREAD_JOIN
     #define FTN_THREAD_ATTACH                    FTN_THREAD_ATTACH
+    #define FTN_GET_INITIAL_THREAD               FTN_GET_INITIAL_THREAD
     #define FTN_GET_RUNTIME_HANDLE               FTN_GET_RUNTIME_HANDLE
+    #define FTN_GET_NUM_THREADS_RUNTIME          FTN_GET_NUM_THREADS_RUNTIME
+    #define FTN_GET_GLOBAL_NUM_THREADS           FTN_GET_GLOBAL_NUM_THREADS
+    #define FTN_GET_GLOBAL_THREAD_NUM            FTN_GET_GLOBAL_THREAD_NUM
+    #define FTN_TASK_CREATE                      FTN_TASK_CREATE
 
 #endif
 
@@ -525,6 +534,7 @@
     #define FTN_TARGET_DISASSOCIATE_PTR          OMP_TARGET_DISASSOCIATE_PTR_
 # endif
 
+
     #define FTN_SET_WAIT_POLICY                  FTN_SET_WAIT_POLICY_
     #define FTN_GET_WAIT_POLICY                  FTN_GET_WAIT_POLICY_
     #define FTN_QUIESCE                          FTN_QUIESCE_
@@ -532,7 +542,13 @@
     #define FTN_THREAD_EXIT                      FTN_THREAD_EXIT_
     #define FTN_THREAD_JOIN                      FTN_THREAD_JOIN_
     #define FTN_THREAD_ATTACH                    FTN_THREAD_ATTACH_
+    #define FTN_GET_INITIAL_THREAD               FTN_GET_INITIAL_THREAD_
     #define FTN_GET_RUNTIME_HANDLE               FTN_GET_RUNTIME_HANDLE_
+    #define FTN_GET_NUM_THREADS_RUNTIME          FTN_GET_NUM_THREADS_RUNTIME_
+    #define FTN_GET_GLOBAL_NUM_THREADS           FTN_GET_GLOBAL_NUM_THREADS_
+    #define FTN_GET_GLOBAL_THREAD_NUM            FTN_GET_GLOBAL_THREAD_NUM_
+    #define FTN_TASK_CREATE                      FTN_TASK_CREATE_
+
 #endif
 
 #endif /* KMP_FTN_UAPPEND */

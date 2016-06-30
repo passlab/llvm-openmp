@@ -976,8 +976,28 @@ FTN_GET_RUNTIME_HANDLE( void )
 int FTN_STDCALL
 FTN_GET_NUM_THREADS_RUNTIME( omp_thread_state_t state )
 {
+    int i;
+    int num = 0;
+    for ( i = 0; i < __kmp_threads_capacity; i++ ) {
+        kmp_info_t * thread = __kmp_threads[ i ];
+        if ( thread == NULL ) break;
+        thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
+        if (i == gtid) continue;
+
+        return 0;
+}
+
+int FTN_STDCALL
+FTN_GET_GLOBAL_NUM_THREADS( omp_thread_state_t state )
+{
     return 0;
 }
+
+int FTN_STDCALL
+FTN_GET_GLOBAL_THREAD_NUM ( ) {
+    return __kmp_get_gtid();
+}
+
 int FTN_STDCALL
 FTN_TASK_CREATE( omp_task_t * t, void *(*task_func)(void *), void * task_args, int (*task_test_func)(omp_task_t),
                  int *intags, int num_intags, int * outtags, int num_outtags )
