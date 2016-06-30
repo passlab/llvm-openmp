@@ -829,19 +829,49 @@ FTN_GET_PARTITION_PLACE_NUMS( int *place_nums ) {
 void FTN_STDCALL
 FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
 {
+    if (wait_policy == omp_wait_policy) {
+        return;
+    }
+
+    if (xexpand(FTN_IN_PARALLEL)()) {
+       fprintf(stderr, "omp_set_wait_policy is recommended to be called in the sequential r
+    }
+
     if (wait_policy == omp_thread_state_SPIN) { /* ACTIVE */
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
         __kmp_yield_init = 0;
         __kmp_yield_next = 0;
         __kmp_library = library_turnaround;
         __kmp_aux_set_library(__kmp_library);
+        //__kmp_user_set_library(__kmp_library);
+        kmpc_set_blocktime(__kmp_dflt_blocktime);
+
+        /* if the current state is SLEEP, we need to wake up the sleeping thread if they have been put to sleep */
+        if (omp_wait_policy == OMP_PASSIVE_WAIT) {
+            int gtid = __kmp_get_gtid();
+
+            int i;
+            for ( i = 0; i < __kmp_threads_capacity; i++ ) {
+                if (i == gtid) continue;
+                kmp_info_t * thread = __kmp_threads[ i ];
+                if ( thread == NULL ) break;
+                volatile void *sleep_loc;
+                // If the thread is sleeping, awaken it.
+                if ( ( sleep_loc = TCR_PTR( thread->th.th_sleep_loc) ) != NULL ) {
+                    KA_TRACE( 10, ( "__kmp_set_wait_policy T#%d waking up thread T#%d\n", gtid, __kmp_gtid_from_thread( thread ) ) );
+                    __kmp_null_resume_wrapper(__kmp_gtid_from_thread(thread), sleep_loc);
+                }
+            }
+        }
         omp_wait_policy = omp_thread_state_SPIN;
     } else if ( wait_policy == omp_thread_state_YIELD ) {
         __kmp_yield_init = KMP_MAX_INIT_WAIT;
         __kmp_yield_next = KMP_MAX_NEXT_WAIT;
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* if we yield long enough, we should sleep */
-        __kmp_library = library_turnaround;
+        __kmp_library = library_throughput;
         __kmp_aux_set_library(__kmp_library);
+        //__kmp_user_set_library(__kmp_library);
+        kmpc_set_blocktime(__kmp_dflt_blocktime);
         omp_wait_policy = omp_thread_state_YIELD;
     } else if ( wait_policy == omp_thread_state_SLEEP ) { /* PASSIVE */
         __kmp_dflt_blocktime = 0; /* this override the env setting if any */
@@ -849,6 +879,10 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
         __kmp_yield_next = 0;
         __kmp_library = library_throughput;
         __kmp_aux_set_library(__kmp_library);
+        //__kmp_user_set_library(__kmp_library);
+        kmpc_set_blocktime(__kmp_dflt_blocktime);
+        /* putting thread to sleep does not happen immediately, check kmp_wait_release.h#__kmp_wait_template for
+         * how the waiting state is handled */
         omp_wait_policy = omp_thread_state_SLEEP;
     }
 }
