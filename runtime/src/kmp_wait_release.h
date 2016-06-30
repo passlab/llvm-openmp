@@ -136,11 +136,12 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         }
     }
 #endif
-
+    while (flag->notdone_check()) {
+    this_thr->th.wait_state = omp_thread_state_SPIN;
     // Setup for waiting
     KMP_INIT_YIELD(spins);
 
-    if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME) {
+    //if (__kmp_dflt_blocktime != KMP_MAX_BLOCKTIME) {
         // The worker threads cannot rely on the team struct existing at this point.
         // Use the bt values cached in the thread struct instead.
 #ifdef KMP_ADJUST_BLOCKTIME
@@ -164,12 +165,11 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         KF_TRACE(20, ("__kmp_wait_sleep: T#%d now=%d, hibernate=%d, intervals=%d\n",
                       th_gtid, __kmp_global.g.g_time.dt.t_value, hibernate,
                       hibernate - __kmp_global.g.g_time.dt.t_value));
-    }
+    //}
 
     KMP_MB();
 
     // Main wait spin loop
-    while (flag->notdone_check()) {
         int in_pool;
         kmp_task_team_t * task_team = NULL;
         if (__kmp_tasking_mode != tskm_immediate_exec) {
@@ -200,6 +200,7 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             break;
         }
 
+        this_thr->th.wait_state = omp_thread_state_YIELD;
         // If we are oversubscribed, or have waited a bit (and KMP_LIBRARY=throughput), then yield
         KMP_YIELD(TCR_4(__kmp_nth) > __kmp_avail_proc);
         // TODO: Should it be number of cores instead of thread contexts? Like:
@@ -243,13 +244,14 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         // Don't suspend if there is a likelihood of new tasks being spawned.
         if ((task_team != NULL) && TCR_4(task_team->tt.tt_found_tasks))
             continue;
-
+        
         // If we have waited a bit more, fall asleep
         if (TCR_4(__kmp_global.g.g_time.dt.t_value) < hibernate)
             continue;
 
         KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
-
+       
+	this_thr->th.wait_state = omp_thread_state_SLEEP;
         flag->suspend(th_gtid);
 
         if (TCR_4(__kmp_global.g.g_done)) {
@@ -258,7 +260,8 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             break;
         }
         // TODO: If thread is done with work and times out, disband/free
-    }
+    } 
+    this_thr->th.wait_state = omp_thread_state_RUN;
 
 #if OMPT_SUPPORT && OMPT_BLAME
     if (ompt_enabled &&

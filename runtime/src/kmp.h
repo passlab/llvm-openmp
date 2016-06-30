@@ -2465,6 +2465,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
     kmp_stats_list* th_stats;
 #endif
     void * interop_thr;
+    int wait_state;
 } kmp_base_info_t;
 
 typedef union KMP_ALIGN_CACHE kmp_info {
