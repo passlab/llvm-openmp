@@ -22,6 +22,7 @@
 #endif
 
 #include "kmp_i18n.h"
+#include "kmp_wait_release.h"
 
 #ifdef __cplusplus
     extern "C" {
@@ -834,16 +835,15 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
     }
 
     if (xexpand(FTN_IN_PARALLEL)()) {
-       fprintf(stderr, "omp_set_wait_policy is recommended to be called in the sequential r
+       fprintf(stderr, "Call to omp_set_wait_policy in paralllel region is ignored!\n");
+       return;
     }
 
     if (wait_policy == omp_thread_state_SPIN) { /* ACTIVE */
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
-        __kmp_yield_init = 0;
-        __kmp_yield_next = 0;
-        __kmp_library = library_turnaround;
-        __kmp_aux_set_library(__kmp_library);
-        //__kmp_user_set_library(__kmp_library);
+        //__kmp_yield_init = 0;
+        //__kmp_yield_next = 0;
+        __kmp_user_set_library(library_turnaround);
         kmpc_set_blocktime(__kmp_dflt_blocktime);
 
         /* if the current state is SLEEP, we need to wake up the sleeping thread if they have been put to sleep */
@@ -852,9 +852,14 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
 
             int i;
             for ( i = 0; i < __kmp_threads_capacity; i++ ) {
-                if (i == gtid) continue;
                 kmp_info_t * thread = __kmp_threads[ i ];
                 if ( thread == NULL ) break;
+		thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
+                if (i == gtid) continue;
+                /* this approach does not work, segfault */
+		//kmp_flag_64 flag(&thread->th.th_bar[ bs_forkjoin_barrier ].bb.b_go, thread);
+                //__kmp_release_64(&flag);
+
                 volatile void *sleep_loc;
                 // If the thread is sleeping, awaken it.
                 if ( ( sleep_loc = TCR_PTR( thread->th.th_sleep_loc) ) != NULL ) {
@@ -865,22 +870,26 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
         }
         omp_wait_policy = omp_thread_state_SPIN;
     } else if ( wait_policy == omp_thread_state_YIELD ) {
-        __kmp_yield_init = KMP_MAX_INIT_WAIT;
-        __kmp_yield_next = KMP_MAX_NEXT_WAIT;
+        //__kmp_yield_init = KMP_MAX_INIT_WAIT;
+        //__kmp_yield_next = KMP_MAX_NEXT_WAIT;
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* if we yield long enough, we should sleep */
-        __kmp_library = library_throughput;
-        __kmp_aux_set_library(__kmp_library);
-        //__kmp_user_set_library(__kmp_library);
+        __kmp_user_set_library(library_throughput);
         kmpc_set_blocktime(__kmp_dflt_blocktime);
         omp_wait_policy = omp_thread_state_YIELD;
     } else if ( wait_policy == omp_thread_state_SLEEP ) { /* PASSIVE */
-        __kmp_dflt_blocktime = 0; /* this override the env setting if any */
-        __kmp_yield_init = 0;
-        __kmp_yield_next = 0;
-        __kmp_library = library_throughput;
-        __kmp_aux_set_library(__kmp_library);
-        //__kmp_user_set_library(__kmp_library);
+        printf("Switch to PASSIVE from :%d\n", omp_wait_policy);
+        __kmp_dflt_blocktime = 0;
         kmpc_set_blocktime(__kmp_dflt_blocktime);
+        //__kmp_yield_init = 0;
+        //__kmp_yield_next = 0;
+        __kmp_user_set_library(library_throughput);
+        int gtid = __kmp_get_gtid();
+        int i;
+        for ( i = 0; i < __kmp_threads_capacity; i++ ) {
+            kmp_info_t * thread = __kmp_threads[ i ];
+            if ( thread == NULL ) break;
+            thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
+	}
         /* putting thread to sleep does not happen immediately, check kmp_wait_release.h#__kmp_wait_template for
          * how the waiting state is handled */
         omp_wait_policy = omp_thread_state_SLEEP;
