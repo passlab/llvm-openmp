@@ -838,6 +838,8 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
        fprintf(stderr, "Call to omp_set_wait_policy in paralllel region is ignored!\n");
        return;
     }
+    int i;
+    int gtid = __kmp_get_gtid();
 
     if (wait_policy == omp_thread_state_SPIN) { /* ACTIVE */
         __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
@@ -848,9 +850,6 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
 
         /* if the current state is SLEEP, we need to wake up the sleeping thread if they have been put to sleep */
         if (omp_wait_policy == OMP_PASSIVE_WAIT) {
-            int gtid = __kmp_get_gtid();
-
-            int i;
             for ( i = 0; i < __kmp_threads_capacity; i++ ) {
                 kmp_info_t * thread = __kmp_threads[ i ];
                 if ( thread == NULL ) break;
