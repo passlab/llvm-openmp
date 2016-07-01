@@ -877,7 +877,6 @@ FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
         kmpc_set_blocktime(__kmp_dflt_blocktime);
         omp_wait_policy = omp_thread_state_YIELD;
     } else if ( wait_policy == omp_thread_state_SLEEP ) { /* PASSIVE */
-        printf("Switch to PASSIVE from :%d\n", omp_wait_policy);
         __kmp_dflt_blocktime = 0;
         kmpc_set_blocktime(__kmp_dflt_blocktime);
         //__kmp_yield_init = 0;
