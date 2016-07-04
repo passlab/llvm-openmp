@@ -136,8 +136,6 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         }
     }
 #endif
-    while (flag->notdone_check()) {
-    this_thr->th.wait_state = omp_thread_state_SPIN;
     // Setup for waiting
     KMP_INIT_YIELD(spins);
 
@@ -167,9 +165,14 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
                       hibernate - __kmp_global.g.g_time.dt.t_value));
     //}
 
+
     KMP_MB();
 
+    kmp_root_t * root = this_thr->th.th_root;
+
     // Main wait spin loop
+    while (flag->notdone_check()) {
+        this_thr->th.th_wait_state = omp_thread_state_SPIN;
         int in_pool;
         kmp_task_team_t * task_team = NULL;
         if (__kmp_tasking_mode != tskm_immediate_exec) {
@@ -199,14 +202,14 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
                 __kmp_abort_thread();
             break;
         }
-
-        this_thr->th.wait_state = omp_thread_state_YIELD;
+#if 0
         // If we are oversubscribed, or have waited a bit (and KMP_LIBRARY=throughput), then yield
         KMP_YIELD(TCR_4(__kmp_nth) > __kmp_avail_proc);
         // TODO: Should it be number of cores instead of thread contexts? Like:
         // KMP_YIELD(TCR_4(__kmp_nth) > __kmp_ncores);
         // Need performance improvement data to make the change...
         KMP_YIELD_SPIN(spins);
+#endif
 
         // Check if this thread was transferred from a team
         // to the thread pool (or vice-versa) while spinning.
@@ -236,22 +239,53 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             KMP_PUSH_PARTITIONED_TIMER(OMP_idle);
         }
 #endif
+        omp_thread_state_t wait_policy;
+        int blocktime;
+        if (this_thr->th.th_wait_policy_set) {
+            wait_policy = this_thr->th.th_wait_policy;
+            blocktime = this_thr->th.th_blocktime;
+        } else if (root->r.r_wait_policy_set) {
+            wait_policy = root->r.r_wait_policy;
+            blocktime = root->r.r_blocktime;
+        } else {
+            wait_policy = omp_default_wait_policy;
+            blocktime = __kmp_dflt_blocktime;
+        }
+        if (wait_policy == omp_thread_state_SPIN) continue;
+        /* prepare for YIELD SPIN*/
 
+        if (wait_policy == omp_thread_state_YIELD) {
+            spins = blocktime;
+            this_thr->th.th_wait_state = omp_thread_state_YIELD;
+            while (spins > 0) { /* the yield spin */
+                KMP_CPU_PAUSE();
+                spins -= 2;
+                KMP_YIELD(1);
+                if (!flag->notdone_check()) break;
+                if (TCR_4(__kmp_global.g.g_done)) {
+                    if (__kmp_global.g.g_abort)
+                        __kmp_abort_thread();
+                    break;
+                }
+            }
+            continue;
+        }
+#if 0
         // Don't suspend if KMP_BLOCKTIME is set to "infinite"
         if (__kmp_dflt_blocktime == KMP_MAX_BLOCKTIME)
             continue;
-
+#endif
         // Don't suspend if there is a likelihood of new tasks being spawned.
         if ((task_team != NULL) && TCR_4(task_team->tt.tt_found_tasks))
             continue;
-        
+#if 0
         // If we have waited a bit more, fall asleep
         if (TCR_4(__kmp_global.g.g_time.dt.t_value) < hibernate)
             continue;
-
+#endif
         KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
        
-	this_thr->th.wait_state = omp_thread_state_SLEEP;
+	    this_thr->th.th_wait_state = omp_thread_state_SLEEP;
         flag->suspend(th_gtid);
 
         if (TCR_4(__kmp_global.g.g_done)) {
@@ -261,7 +295,7 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         }
         // TODO: If thread is done with work and times out, disband/free
     } 
-    this_thr->th.wait_state = omp_thread_state_RUN;
+    this_thr->th.th_wait_state = omp_thread_state_RUN;
 
 #if OMPT_SUPPORT && OMPT_BLAME
     if (ompt_enabled &&

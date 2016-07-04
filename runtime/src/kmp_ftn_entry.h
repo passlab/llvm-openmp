@@ -830,94 +830,112 @@ FTN_GET_PARTITION_PLACE_NUMS( int *place_nums ) {
 void FTN_STDCALL
 FTN_SET_WAIT_POLICY(omp_thread_state_t wait_policy)
 {
-    if (wait_policy == omp_wait_policy) {
+    /* if in parallel and non-master, it only set its own policy
+     * if in parallel aand master, it set the policy for all the team threads
+     * but the master never set itself to SLEEP
+     *
+     * We have data race here when the master and a non-master thread set the wait policy the same time
+     */
+    int blocktime = KMP_MAX_BLOCKTIME;
+    if (wait_policy == omp_thread_state_SLEEP) blocktime = 0;
+    int gtid = __kmp_get_gtid();
+    int i;
+    kmp_info_t * this_th = __kmp_threads[gtid];
+    if (xexpand(FTN_IN_PARALLEL)()) {
+        kmp_team_t * team = this_th->th.th_team;
+        kmp_info_t * master = team->t.t_threads[0];
+        if (master == this_th) {
+            if (wait_policy == omp_thread_state_SLEEP) i = 1;
+            else i = 0;
+
+            for (; i<team->t.t_nproc; i++) {
+                kmp_info_t * th =  team->t.t_threads[i];
+                th->th.th_wait_policy = wait_policy;
+                th->th.th_blocktime = blocktime;
+                th->th.th_wait_policy_set = 1;
+            }
+        } else {
+            /* we disable setting the wait policy by each invidual thread so only master can do this */
+#if 0
+            this_th->th.th_wait_policy = wait_policy;
+            this_th->th.th_blocktime = blocktime;
+            this_th->th.th_wait_policy_set = 1;
+#endif
+        }
+        return;
+    }
+    /* we only allow a root thread to change the wait policy of all the threads rooted at this
+     * If non-root, it can only change the team wait policy if it is the master
+     * If non-root, non-master, it can only change its own policy
+     * */
+    kmp_root_t * root = this_th->th.th_root;
+    if (root->r.r_uber_thread != this_th) {
+        fprintf(stderr, "Only a root thread can omp_set_wait_policy in the sequential region, only for the decedent threads!\n");
         return;
     }
 
-    if (xexpand(FTN_IN_PARALLEL)()) {
-       fprintf(stderr, "Call to omp_set_wait_policy in paralllel region is ignored!\n");
-       return;
-    }
-    int i;
-    int gtid = __kmp_get_gtid();
-
-    if (wait_policy == omp_thread_state_SPIN) { /* ACTIVE */
-        __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* this override the env setting if any */
-        __kmp_yield_init = 0;
-        __kmp_yield_next = 0;
-        __kmp_user_set_library(library_turnaround);
-        kmpc_set_blocktime(__kmp_dflt_blocktime);
-
-        /* if the current state is SLEEP, we need to wake up the sleeping thread if they have been put to sleep */
-        if (omp_wait_policy == OMP_PASSIVE_WAIT) {
-            for ( i = 0; i < __kmp_threads_capacity; i++ ) {
-                kmp_info_t * thread = __kmp_threads[ i ];
-                if ( thread == NULL ) break;
-		        thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
-                if (i == gtid) continue;
-                /* this approach does not work, segfault */
-		        //kmp_flag_64 flag(&thread->th.th_bar[ bs_forkjoin_barrier ].bb.b_go, thread);
-                //__kmp_release_64(&flag);
-
+    for ( i = 0; i < __kmp_threads_capacity; i++ ) {
+        kmp_info_t * thread = __kmp_threads[ i ];
+        if ( thread == NULL ) break;
+        if (wait_policy == omp_thread_state_SLEEP && thread == root->r.r_uber_thread ) continue; /* we cannot put root to sleep */
+        if (thread->th.th_root == root) {
+            thread->th.th_blocktime = blocktime;
+            thread->th.th_wait_policy = wait_policy;
+            thread->th.th_wait_policy_set = 1;
+            if (wait_policy == omp_thread_state_SPIN || wait_policy == omp_thread_state_YIELD) {
                 volatile void *sleep_loc;
                 // If the thread is sleeping, awaken it.
-                if ( ( sleep_loc = TCR_PTR( thread->th.th_sleep_loc) ) != NULL ) {
-                    KA_TRACE( 10, ( "__kmp_set_wait_policy T#%d waking up thread T#%d to SPIN\n", gtid, __kmp_gtid_from_thread( thread ) ) );
+                if (thread->th.th_wait_state == omp_thread_state_SLEEP && (sleep_loc = TCR_PTR(thread->th.th_sleep_loc)) != NULL) {
+                    KA_TRACE(10,
+                         ("__kmp_set_wait_policy T#%d waking up thread T#%d to SPIN\n", gtid, __kmp_gtid_from_thread(thread)));
                     __kmp_null_resume_wrapper(__kmp_gtid_from_thread(thread), sleep_loc);
                 }
             }
         }
-        omp_wait_policy = omp_thread_state_SPIN;
-    } else if ( wait_policy == omp_thread_state_YIELD ) {
-        __kmp_dflt_blocktime = KMP_MAX_BLOCKTIME; /* if we yield long enough, we should sleep */
-        __kmp_yield_init = KMP_MAX_INIT_WAIT;
-        __kmp_yield_next = KMP_MAX_NEXT_WAIT;
-        __kmp_user_set_library(library_throughput);
-        kmpc_set_blocktime(__kmp_dflt_blocktime);
-        for ( i = 0; i < __kmp_threads_capacity; i++ ) {
-            kmp_info_t * thread = __kmp_threads[ i ];
-            if ( thread == NULL ) break;
-            thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
-            if (omp_wait_policy == OMP_PASSIVE_WAIT && i != gtid) {
-                volatile void *sleep_loc;
-                // If the thread is sleeping, awaken it.
-                if ( ( sleep_loc = TCR_PTR( thread->th.th_sleep_loc) ) != NULL ) {
-                    KA_TRACE( 10, ( "__kmp_set_wait_policy T#%d waking up thread T#%d to YIELD-SPIN\n", gtid, __kmp_gtid_from_thread( thread ) ) );
-                    __kmp_null_resume_wrapper(__kmp_gtid_from_thread(thread), sleep_loc);
-                }
-            }
-        }
-        omp_wait_policy = omp_thread_state_YIELD;
-    } else if ( wait_policy == omp_thread_state_SLEEP ) { /* PASSIVE */
-        __kmp_dflt_blocktime = 0;
-        __kmp_yield_init = 0;
-        __kmp_yield_next = 0;
-        kmpc_set_blocktime(__kmp_dflt_blocktime);
-        __kmp_user_set_library(library_throughput);
-        int gtid = __kmp_get_gtid();
-        int i;
-        for ( i = 0; i < __kmp_threads_capacity; i++ ) {
-            kmp_info_t * thread = __kmp_threads[ i ];
-            if ( thread == NULL ) break;
-            thread->th.th_team_bt_intervals = __kmp_dflt_blocktime;
-	    }
-        /* putting thread to sleep does not happen immediately, check kmp_wait_release.h#__kmp_wait_template for
-         * how the waiting state is handled */
-        omp_wait_policy = omp_thread_state_SLEEP;
     }
+    root->r.r_wait_policy = wait_policy;
+    root->r.r_blocktime = blocktime;
+    root->r.r_wait_policy_set = 1;
 }
 
 int FTN_STDCALL
 FTN_GET_WAIT_POLICY( void )
 {
-    return omp_wait_policy;
+    int gtid = __kmp_get_gtid();
+    int i;
+    kmp_info_t * this_th = __kmp_threads[gtid];
+    if (xexpand(FTN_IN_PARALLEL)()) {
+        if (this_th->th.th_wait_policy_set)
+        return this_th->th.th_wait_policy;
+    }
+    /* we only allow a root thread to change the wait policy of all the threads rooted at this
+     * If non-root, it can only change the team wait policy if it is the master
+     * If non-root, non-master, it can only change its own policy
+     * */
+    kmp_root_t * root = this_th->th.th_root;
+    if (root->r.r_wait_policy_set)
+        return root->r.r_wait_policy;
+    else return omp_default_wait_policy;
 }
 
 int FTN_STDCALL
 FTN_QUIESCE( omp_thread_state_t quiesce_state ) {
-    if (quiesce_state == omp_thread_state_SLEEP || quiesce_state == omp_thread_state_SPIN ||
-        quiesce_state == omp_thread_state_YIELD) {
-        FTN_SET_WAIT_POLICY(quiesce_state);
+    if (quiesce_state == omp_thread_state_SLEEP) {
+        int i;
+        for ( i = 0; i < __kmp_threads_capacity; i++ ) {
+            kmp_info_t * thread = __kmp_threads[ i ];
+            if ( thread == NULL ) break;
+            if ( KMP_UBER_GTID(i) ) {
+                kmp_root_t * root = __kmp_root[i];
+                root->r.r_wait_policy = omp_thread_state_SLEEP;
+                root->r.r_blocktime = 0;
+                root->r.r_wait_policy_set = 1;
+                continue;
+            }
+            thread->th.th_blocktime = 0;
+            thread->th.th_wait_policy = omp_thread_state_SLEEP;
+            thread->th.th_wait_policy_set = 1;
+        }
     } else if (quiesce_state == omp_thread_state_KILL) {
         __kmp_internal_end_fini();
     } else {
@@ -978,7 +996,7 @@ FTN_GET_NUM_THREADS_RUNTIME( omp_thread_state_t state )
     for ( i = 0; i < __kmp_threads_capacity; i++ ) {
         kmp_info_t *thread = __kmp_threads[i];
         if (thread == NULL) break;
-        if (thread->th.wait_state == state) num++;
+        if (thread->th.th_wait_state == state) num++;
     }
 
     if (state == omp_thread_state_ANY) return i;

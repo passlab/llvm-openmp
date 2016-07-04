@@ -3078,6 +3078,8 @@ __kmp_initialize_root( kmp_root_t *root )
     root->r.r_blocktime    = __kmp_dflt_blocktime;
     root->r.r_nested       = __kmp_dflt_nested;
 
+    root->r.r_wait_policy_set = 0;
+
     /* setup the root team for this task */
     /* allocate the root team structure */
     KF_TRACE( 10, ( "__kmp_initialize_root: before root_team\n" ) );
@@ -3983,6 +3985,7 @@ __kmp_initialize_info( kmp_info_t *this_thr, kmp_team_t *team, int tid, int gtid
     KMP_DEBUG_ASSERT( master->th.th_root );
 
     this_thr->th.interop_thr = NULL;
+    this_thr->th.th_wait_policy_set = 0;
 
     KMP_MB();
 
