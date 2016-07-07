@@ -172,7 +172,6 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
 
     // Main wait spin loop
     while (flag->notdone_check()) {
-        this_thr->th.th_wait_state = omp_thread_state_SPIN;
         int in_pool;
         kmp_task_team_t * task_team = NULL;
         if (__kmp_tasking_mode != tskm_immediate_exec) {
@@ -185,9 +184,11 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
 	          (perhaps the outer one), or else tasking was manually disabled (KMP_TASKING=0).  */
             if (task_team != NULL) {
                 if (TCR_SYNC_4(task_team->tt.tt_active)) {
-                    if (KMP_TASKING_ENABLED(task_team))
+                    if (KMP_TASKING_ENABLED(task_team)) {
+                        this_thr->th.th_wait_state = OMP_RUNNING;
                         flag->execute_tasks(this_thr, th_gtid, final_spin, &tasks_completed
                                             USE_ITT_BUILD_ARG(itt_sync_obj), 0);
+                    }
                 }
                 else {
                     KMP_DEBUG_ASSERT(!KMP_MASTER_TID(this_thr->th.th_info.ds.ds_tid));
@@ -239,7 +240,7 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             KMP_PUSH_PARTITIONED_TIMER(OMP_idle);
         }
 #endif
-        omp_thread_state_t wait_policy;
+        omp_wait_policy_t wait_policy;
         int blocktime;
         if (this_thr->th.th_wait_policy_set) {
             wait_policy = this_thr->th.th_wait_policy;
@@ -251,16 +252,30 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             wait_policy = omp_default_wait_policy;
             blocktime = __kmp_dflt_blocktime;
         }
-        if (wait_policy == omp_thread_state_SPIN) continue;
-        /* prepare for YIELD SPIN*/
+        if (wait_policy == OMP_SPIN_BUSY_WAIT) {
+            this_thr->th.th_wait_state = OMP_SPIN_BUSY_WAIT;
+            continue;
+        }
 
-        if (wait_policy == omp_thread_state_YIELD) {
-            spins = blocktime;
-            this_thr->th.th_wait_state = omp_thread_state_YIELD;
-            while (spins > 0) { /* the yield spin */
+        if (wait_policy == OMP_SPIN_PAUSE_WAIT) {
+            this_thr->th.th_wait_state = OMP_SPIN_PAUSE_WAIT;
+            while (1) { /* the spin pause*/
                 KMP_CPU_PAUSE();
-                spins -= 2;
                 KMP_YIELD(1);
+                if (!flag->notdone_check()) break;
+                if (TCR_4(__kmp_global.g.g_done)) {
+                    if (__kmp_global.g.g_abort)
+                        __kmp_abort_thread();
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if (wait_policy == OMP_SPIN_YIELD_WAIT) {
+            this_thr->th.th_wait_state = OMP_SPIN_YIELD_WAIT;
+            while (1) { /* the spin pause*/
+                sched_yield();
                 if (!flag->notdone_check()) break;
                 if (TCR_4(__kmp_global.g.g_done)) {
                     if (__kmp_global.g.g_abort)
@@ -285,7 +300,7 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
 #endif
         KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
        
-	    this_thr->th.th_wait_state = omp_thread_state_SLEEP;
+	    this_thr->th.th_wait_state = OMP_SUSPEND_WAIT;
         flag->suspend(th_gtid);
 
         if (TCR_4(__kmp_global.g.g_done)) {
@@ -295,7 +310,7 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         }
         // TODO: If thread is done with work and times out, disband/free
     } 
-    this_thr->th.th_wait_state = omp_thread_state_RUN;
+    this_thr->th.th_wait_state = OMP_RUNNING;
 
 #if OMPT_SUPPORT && OMPT_BLAME
     if (ompt_enabled &&
