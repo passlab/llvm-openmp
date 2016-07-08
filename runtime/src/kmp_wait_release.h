@@ -84,6 +84,22 @@ class kmp_flag {
     */
 };
 
+static omp_wait_policy_t __kmp_get_wait_policy(kmp_info_t *this_thr, int *blocktime) {
+    omp_wait_policy_t wait_policy;
+    kmp_root_t * root = this_thr->th.th_root;
+    if (this_thr->th.th_wait_policy_set) {
+        wait_policy = this_thr->th.th_wait_policy;
+        *blocktime = this_thr->th.th_blocktime;
+    } else if (root->r.r_wait_policy_set) {
+        wait_policy = root->r.r_wait_policy;
+        *blocktime = root->r.r_blocktime;
+    } else {
+        wait_policy = omp_default_wait_policy;
+        *blocktime = __kmp_dflt_blocktime;
+    }
+    return wait_policy;
+}
+
 /* Spin wait loop that first does pause, then yield, then sleep. A thread that calls __kmp_wait_*
    must make certain that another thread calls __kmp_release to wake it back up to prevent deadlocks!  */
 template <class C>
@@ -240,18 +256,8 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
             KMP_PUSH_PARTITIONED_TIMER(OMP_idle);
         }
 #endif
-        omp_wait_policy_t wait_policy;
         int blocktime;
-        if (this_thr->th.th_wait_policy_set) {
-            wait_policy = this_thr->th.th_wait_policy;
-            blocktime = this_thr->th.th_blocktime;
-        } else if (root->r.r_wait_policy_set) {
-            wait_policy = root->r.r_wait_policy;
-            blocktime = root->r.r_blocktime;
-        } else {
-            wait_policy = omp_default_wait_policy;
-            blocktime = __kmp_dflt_blocktime;
-        }
+        omp_wait_policy_t wait_policy = __kmp_get_wait_policy(this_thr, &blocktime);
         if (wait_policy == OMP_SPIN_BUSY_WAIT) {
             this_thr->th.th_wait_state = OMP_SPIN_BUSY_WAIT;
             continue;
@@ -268,6 +274,8 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
                         __kmp_abort_thread();
                     break;
                 }
+                wait_policy = __kmp_get_wait_policy(this_thr, &blocktime);
+                if (wait_policy != OMP_SPIN_PAUSE_WAIT) break;
             }
             continue;
         }
@@ -282,6 +290,8 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
                         __kmp_abort_thread();
                     break;
                 }
+                wait_policy = __kmp_get_wait_policy(this_thr, &blocktime);
+                if (wait_policy != OMP_SPIN_YIELD_WAIT) break;
             }
             continue;
         }
@@ -298,10 +308,17 @@ __kmp_wait_template(kmp_info_t *this_thr, C *flag, int final_spin
         if (TCR_4(__kmp_global.g.g_time.dt.t_value) < hibernate)
             continue;
 #endif
-        KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
-       
-	    this_thr->th.th_wait_state = OMP_SUSPEND_WAIT;
-        flag->suspend(th_gtid);
+
+        if (wait_policy == OMP_SUSPEND_WAIT) {
+            KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
+            this_thr->th.th_wait_state = OMP_SUSPEND_WAIT;
+            flag->suspend(th_gtid);
+        }
+
+        if (wait_policy == OMP_TERMINATE) {
+            this_thr->th.th_wait_state = OMP_TERMINATE;
+            /* TODO */
+        }
 
         if (TCR_4(__kmp_global.g.g_done)) {
             if (__kmp_global.g.g_abort)
