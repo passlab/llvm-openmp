@@ -90,7 +90,7 @@ static omp_wait_policy_t __kmp_get_wait_policy(kmp_info_t *this_thr, int *blockt
     if (this_thr->th.th_wait_policy_set) {
         wait_policy = this_thr->th.th_wait_policy;
         *blocktime = this_thr->th.th_blocktime;
-    } else if (root->r.r_wait_policy_set) {
+    } else if (root != NULL && root->r.r_wait_policy_set) {
         wait_policy = root->r.r_wait_policy;
         *blocktime = root->r.r_blocktime;
     } else {
