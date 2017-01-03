@@ -72,6 +72,10 @@
 #if LIBOMP_TSAN_SUPPORT
 #define TSAN_SUPPORT
 #endif
+#cmakedefine01 LIBOMP_REX_SUPPORT
+#if LIBOMP_REX_SUPPORT
+#define REX_SUPPORT
+#endif
 
 // Configured cache line based on architecture
 #if KMP_ARCH_PPC64

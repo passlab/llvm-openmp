@@ -16,16 +16,27 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
 # Standalone build or part of LLVM?
-set(LIBOMP_STANDALONE_BUILD FALSE)
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" OR
    "${CMAKE_SOURCE_DIR}/runtime" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-  project(libomp C CXX)
   set(LIBOMP_STANDALONE_BUILD TRUE)
+endif()
+
+if(${LIBOMP_STANDALONE_BUILD})
+  project(libomp C CXX)
 endif()
 
 # Set libomp version
 set(LIBOMP_VERSION_MAJOR 5)
 set(LIBOMP_VERSION_MINOR 0)
+
+# Set rex version
+if(${LIBOMP_REX_SUPPORT})
+  set(REX_VERSION_MAJOR 0)
+  set(REX_VERSION_MINOR 1)
+  set(LIBOMP_REX_SUPPORT TRUE)
+else()
+  set(LIBOMP_REX_SUPPORT FALSE)
+endif()
 
 # These include files are in the cmake/ subdirectory
 include(LibompUtils)
@@ -390,6 +401,10 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("REX runtime support  -- ${LIBOMP_REX_SUPPORT}")
+  if(${LIBOMP_REX_SUPPORT})
+    libomp_say("REX Version          -- ${REX_VERSION_MAJOR}.${REX_VERSION_MINOR}")
+  endif()
 endif()
 
 add_subdirectory(src)

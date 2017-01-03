@@ -48,7 +48,9 @@ VERSION {
 
         _You_must_link_with_*;     # Mutual detection/MS compatibility symbols.
 
-
+#if REX_SUPPORT
+        rex_*;     # rex.h exported symbols for rex runtime
+#endif
         #
         # Debugger support.
         #
