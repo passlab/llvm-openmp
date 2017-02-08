@@ -243,6 +243,8 @@ int rex_init_devices() {
     if (dev_spec_file != NULL) {
         rex_read_device_spec(dev_spec_file);
     } else { /* probe devices is not supported yet */
+        fprintf(stderr, "REX_DEV_SPEC_FILE needs to be set to point to INI file for device specification\n");
+        return -1;
     }
     if (rex_num_devices) {
         default_device_var = 0;

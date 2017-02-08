@@ -206,6 +206,7 @@ void rex_topology_print(rex_grid_topology_t * top) {
     for(i=0; i<top->ndims; i++)
         printf("[%d]", top->dims[i]);
     printf("\n");
+
     for (i=0; i<top->nnodes; i++) {
         printf("%d->%d\n", i, top->idmap[i]);
     }

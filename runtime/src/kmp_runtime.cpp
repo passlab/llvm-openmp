@@ -31,6 +31,10 @@
 #include "ompt-specific.h"
 #endif
 
+#ifdef REX_SUPPORT
+#include "rex.h"
+#endif
+
 /* these are temporary issues to be dealt with */
 #define KMP_USE_PRCTL 0
 
@@ -6558,6 +6562,10 @@ __kmp_do_serial_initialize( void )
 #endif
 
     KMP_MB();
+
+#ifdef REX_SUPPORT
+    rex_init_devices();
+#endif
 
     KA_TRACE( 10, ("__kmp_do_serial_initialize: exit\n" ) );
 }
