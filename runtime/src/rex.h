@@ -978,6 +978,12 @@ extern void rex_factor(int n, int factor[], int dims);
 extern void rex_topology_print(rex_grid_topology_t * top);
 extern int rex_grid_topology_get_seqid(rex_grid_topology_t * top, int devid);
 
+
+/** =================================================================================================================== *
+ * APIs for devices
+ */
+extern char * rex_get_device_typename(rex_device_t * dev);
+
 /** =================================================================================================================== *
  * APIs for data maps
  */
@@ -992,7 +998,7 @@ extern void rex_datamap_info_set_dims_1d(rex_datamap_info_t * info, long dim0);
 extern void rex_datamap_info_set_dims_2d(rex_datamap_info_t * info, long dim0, long dim1);
 extern void rex_datamap_info_set_dims_3d(rex_datamap_info_t * info, long dim0, long dim1, long dim2);
 
-extern void rex_print_map_info(rex_datamap_info_t * info);
+extern void rex_datamap_print_info(rex_datamap_info_t * info);
 
 extern void rex_datamap_dist_init_info(rex_datamap_info_t *map_info, int dim, rex_dist_policy_t dist_policy,
 										long offset, long length, float chunk_size, int topdim);
@@ -1009,7 +1015,7 @@ extern void rex_loop_dist_align_with_datamap(rex_wunit_info_t *loop_off_info, in
 											  rex_datamap_info_t *alignee, int alignee_dim);
 extern void rex_loop_dist_align_with_loop(rex_wunit_info_t *loop_off_info, int level, long offset,
 										  rex_wunit_info_t *alignee, int alignee_level);
-extern void rex_datamap_init_map(rex_datamap_t *map, rex_datamap_info_t *info, rex_device_t *dev);
+extern void rex_datamap_init(rex_datamap_t *map, rex_datamap_info_t *info, rex_device_t *dev);
 extern long rex_datamap_dist(rex_datamap_t *map, int seqid);
 extern long rex_loop_iteration_dist(rex_wunit_t *off);
 extern void rex_datamap_add_halo_region(rex_datamap_info_t *info, int dim, int left, int right,
@@ -1019,11 +1025,11 @@ extern void rex_datamap_add_halo_region(rex_datamap_info_t *info, int dim, int l
 //extern int rex_datamap_get_halo_right_devseqid(rex_datamap_t * map, int dim);
 
 extern rex_datamap_t *rex_datamap_offcache_iterator(rex_wunit_t *off, int index, int * inherited);
-extern void rex_datamap_append_map_to_offcache(rex_wunit_t *off, rex_datamap_t *map, int inherited);
-extern int rex_datamap_is_map_inherited(rex_wunit_t *off, rex_datamap_t *map);
-extern rex_datamap_t * rex_datamap_get_map_inheritance (rex_device_t * dev, void * host_ptr);
-extern rex_datamap_t * rex_datamap_get_map(rex_wunit_t *off, void * host_ptr, int map_index);
-extern void rex_print_datamap(rex_datamap_t * map);
+extern void rex_datamap_append_to_cache(rex_wunit_t *off, rex_datamap_t *map, int inherited);
+extern int rex_datamap_is_inherited(rex_wunit_t *off, rex_datamap_t *map);
+extern rex_datamap_t * rex_datamap_get_inheritance (rex_device_t * dev, void * host_ptr);
+extern rex_datamap_t * rex_datamap_get(rex_wunit_t *off, void * host_ptr, int map_index);
+extern void rex_datamap_print(rex_datamap_t * map);
 extern void rex_datamap_malloc(rex_datamap_t *map, rex_wunit_t *off);
 extern void * rex_datamap_marshal(rex_datamap_t *map);
 
@@ -1047,6 +1053,30 @@ extern void rex_datamap_memcpy_DeviceToDeviceAsync(void * dst, rex_device_t * ds
 extern void rex_halo_region_pull(rex_datamap_t * map, int dim, rex_datamap_exchange_direction_t from_left_right);
 extern void rex_halo_region_pull_async(rex_datamap_t * map, int dim, int from_left_right);
 
+/* device-specific APIs */
+/** datamap mm for hostcpu, in rex_dev_hostcpu.cpp **/
+extern void *rex_malloc_hostcpu(rex_device_t * dev, size_t size);
+extern void rex_free_hostcpu(rex_device_t * dev, void *ptr);
+
+extern void *rex_memcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern void *rex_memcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern void *rex_memcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+
+extern void *rex_asyncmemcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern void *rex_asyncmemcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern void *rex_asyncmemcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+
+/** datamap mm for thsim, in rex_dev_thsim.cpp **/
+extern void *rex_malloc_thsim(rex_device_t * dev, size_t size);
+extern void rex_free_thsim(rex_device_t * dev, void *ptr);
+
+extern void *rex_memcpy_btw_thsim(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern void *rex_memcpy_to_thsim(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern void *rex_memcpy_from_thsim(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+
+extern void *rex_asyncmemcpy_btw_thsim(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern void *rex_asyncmemcpy_to_thsim(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern void *rex_asyncmemcpy_from_thsim(void *dest, const void *src, rex_device_t * src_dev, size_t size);
 
 #if 0
 extern void rex_print_homp_usage();

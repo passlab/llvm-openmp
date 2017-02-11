@@ -121,6 +121,7 @@ libomp_append(LIBOMP_CXXFILES rex_dev_hostcpu.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_dev_nvcuda.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_dev_micomp.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_dev_opencl.cpp IF_TRUE LIBOMP_REX_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_datamap.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_thirdparty/iniparser.c IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_thirdparty/dictionary.c IF_TRUE LIBOMP_REX_SUPPORT)
 
