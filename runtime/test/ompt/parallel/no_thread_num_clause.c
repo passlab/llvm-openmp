@@ -5,7 +5,8 @@
 
 int main()
 {
-  #pragma omp parallel num_threads(4)
+  omp_set_num_threads(4);
+  #pragma omp parallel
   {
     print_ids(0);
     print_ids(1);

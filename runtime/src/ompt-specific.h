@@ -15,35 +15,37 @@ typedef kmp_info_t ompt_thread_t;
  * forward declarations
  ****************************************************************************/
 
-void __ompt_team_assign_id(kmp_team_t *team, ompt_parallel_id_t ompt_pid);
+void __ompt_team_assign_id(kmp_team_t *team, ompt_parallel_data_t ompt_pid);
 void __ompt_thread_assign_wait_id(void *variable);
 
 void __ompt_lw_taskteam_init(ompt_lw_taskteam_t *lwt, ompt_thread_t *thr,
                              int gtid, void *microtask,
-                             ompt_parallel_id_t ompt_pid);
+                             ompt_parallel_data_t** ompt_pid);
 
 void __ompt_lw_taskteam_link(ompt_lw_taskteam_t *lwt,  ompt_thread_t *thr);
 
 ompt_lw_taskteam_t * __ompt_lw_taskteam_unlink(ompt_thread_t *thr);
 
-ompt_parallel_id_t __ompt_parallel_id_new(int gtid);
-ompt_task_id_t __ompt_task_id_new(int gtid);
+ompt_id_t __ompt_parallel_id_new(int gtid);
+ompt_id_t __ompt_task_id_new(int gtid);
 
 ompt_team_info_t *__ompt_get_teaminfo(int depth, int *size);
 
-ompt_task_info_t *__ompt_get_taskinfo(int depth);
+ompt_task_info_t *__ompt_get_task_info_object(int depth);
 
-void __ompt_thread_begin(ompt_thread_type_t thread_type, int gtid);
+int __ompt_get_parallel_info_internal(int ancestor_level, ompt_data_t **parallel_data, int *team_size);
 
-void __ompt_thread_end(ompt_thread_type_t thread_type, int gtid);
+int __ompt_get_task_info_internal(
+    int ancestor_level,
+    ompt_task_type_t *type,
+    ompt_data_t **task_data,
+    ompt_frame_t **task_frame,
+    ompt_data_t **parallel_data,
+    int *thread_num);
 
-int __ompt_get_parallel_team_size_internal(int ancestor_level);
+ompt_thread_data_t *__ompt_get_thread_data_internal();
 
-ompt_task_id_t __ompt_get_task_id_internal(int depth);
-
-ompt_frame_t *__ompt_get_task_frame_internal(int depth);
-
-
+static uint64_t __ompt_get_get_unique_id_internal();
 
 /*****************************************************************************
  * macros
@@ -52,8 +54,6 @@ ompt_frame_t *__ompt_get_task_frame_internal(int depth);
 #define OMPT_HAVE_WEAK_ATTRIBUTE KMP_HAVE_WEAK_ATTRIBUTE
 #define OMPT_HAVE_PSAPI KMP_HAVE_PSAPI
 #define OMPT_STR_MATCH(haystack, needle) __kmp_str_match(haystack, 0, needle)
-
-
 
 //******************************************************************************
 // inline functions

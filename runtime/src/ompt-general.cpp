@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <execinfo.h>
 
 
 
@@ -52,13 +53,14 @@ enum tool_setting_e {
     omp_tool_enabled
 };
 
-
-typedef void (*ompt_initialize_t) (
-    ompt_function_lookup_t ompt_fn_lookup,
-    const char *version,
-    unsigned int ompt_version
+typedef int (*ompt_initialize_t) (
+    ompt_function_lookup_t lookup,
+    struct ompt_fns_t *fns
 );
 
+typedef void (*ompt_finalize_t) (
+    struct ompt_fns_t *fns
+);
 
 
 /*****************************************************************************
@@ -73,9 +75,9 @@ ompt_state_info_t ompt_state_info[] = {
 #undef ompt_state_macro
 };
 
-ompt_callbacks_t ompt_callbacks;
+ompt_callbacks_internal_t ompt_callbacks;
 
-static ompt_initialize_t  ompt_initialize_fn = NULL;
+static ompt_fns_t* ompt_fns = NULL;
 
 
 
@@ -85,7 +87,7 @@ static ompt_initialize_t  ompt_initialize_fn = NULL;
 
 static ompt_interface_fn_t ompt_fn_lookup(const char *s);
 
-OMPT_API_ROUTINE ompt_thread_id_t ompt_get_thread_id(void);
+OMPT_API_ROUTINE ompt_thread_data_t* ompt_get_thread_data(void);
 
 
 /*****************************************************************************
@@ -93,7 +95,7 @@ OMPT_API_ROUTINE ompt_thread_id_t ompt_get_thread_id(void);
  ****************************************************************************/
 
 /* On Unix-like systems that support weak symbols the following implementation
- * of ompt_tool() will be used in case no tool-supplied implementation of
+ * of ompt_start_tool() will be used in case no tool-supplied implementation of
  * this function is present in the address space of a process.
  *
  * On Windows, the ompt_tool_windows function is used to find the
@@ -103,10 +105,12 @@ OMPT_API_ROUTINE ompt_thread_id_t ompt_get_thread_id(void);
 #if OMPT_HAVE_WEAK_ATTRIBUTE
 _OMP_EXTERN
 __attribute__ (( weak ))
-ompt_initialize_t ompt_tool()
+ompt_fns_t* ompt_start_tool(
+    unsigned int omp_version,
+    const char *runtime_version)
 {
 #if OMPT_DEBUG
-    printf("ompt_tool() is called from the RTL\n");
+    printf("ompt_start_tool() is called from the RTL\n");
 #endif
     return NULL;
 }
@@ -213,8 +217,8 @@ void ompt_pre_init()
 
     case omp_tool_unset:
     case omp_tool_enabled:
-        ompt_initialize_fn = ompt_tool();
-        if (ompt_initialize_fn) {
+        ompt_fns = ompt_start_tool(__kmp_openmp_version, ompt_get_runtime_version());
+        if (ompt_fns) {
             ompt_enabled = 1;
         }
         break;
@@ -247,16 +251,26 @@ void ompt_post_init()
     // Initialize the tool if so indicated.
     //--------------------------------------------------
     if (ompt_enabled) {
-        ompt_initialize_fn(ompt_fn_lookup, ompt_get_runtime_version(),
-                           OMPT_VERSION);
+        ompt_fns->initialize(ompt_fn_lookup, ompt_fns);
 
         ompt_thread_t *root_thread = ompt_get_thread();
 
         ompt_set_thread_state(root_thread, ompt_state_overhead);
 
-        if (ompt_callbacks.ompt_callback(ompt_event_thread_begin)) {
-            ompt_callbacks.ompt_callback(ompt_event_thread_begin)
-                (ompt_thread_initial, ompt_get_thread_id());
+        if (ompt_callbacks.ompt_callback(ompt_callback_thread_begin)) {
+            ompt_callbacks.ompt_callback(ompt_callback_thread_begin)(
+                ompt_thread_initial, __ompt_get_thread_data_internal());
+        }
+        ompt_data_t* task_data;
+        __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+        if (ompt_callbacks.ompt_callback(ompt_callback_task_create)) {
+            ompt_callbacks.ompt_callback(ompt_callback_task_create)(
+                NULL,
+                NULL,
+                task_data,
+                ompt_task_initial,
+                0,
+                OMPT_GET_RETURN_ADDRESS(0));
         }
 
         ompt_set_thread_state(root_thread, ompt_state_work_serial);
@@ -267,14 +281,11 @@ void ompt_post_init()
 void ompt_fini()
 {
     if (ompt_enabled) {
-        if (ompt_callbacks.ompt_callback(ompt_event_runtime_shutdown)) {
-            ompt_callbacks.ompt_callback(ompt_event_runtime_shutdown)();
-        }
+        ompt_fns->finalize(ompt_fns);
     }
 
     ompt_enabled = 0;
 }
-
 
 /*****************************************************************************
  * interface operations
@@ -284,7 +295,7 @@ void ompt_fini()
  * state
  ****************************************************************************/
 
-OMPT_API_ROUTINE int ompt_enumerate_state(int current_state, int *next_state,
+OMPT_API_ROUTINE int ompt_enumerate_states(int current_state, int *next_state,
                                           const char **next_state_name)
 {
     const static int len = sizeof(ompt_state_info) / sizeof(ompt_state_info_t);
@@ -307,14 +318,14 @@ OMPT_API_ROUTINE int ompt_enumerate_state(int current_state, int *next_state,
  * callbacks
  ****************************************************************************/
 
-OMPT_API_ROUTINE int ompt_set_callback(ompt_event_t evid, ompt_callback_t cb)
+OMPT_API_ROUTINE int ompt_set_callback(ompt_callbacks_t which, ompt_callback_t callback)
 {
-    switch (evid) {
+    switch (which) {
 
 #define ompt_event_macro(event_name, callback_type, event_id)                  \
     case event_name:                                                           \
         if (ompt_event_implementation_status(event_name)) {                    \
-            ompt_callbacks.ompt_callback(event_name) = (callback_type) cb;     \
+            ompt_callbacks.ompt_callback(event_name) = (callback_type) callback;\
         }                                                                      \
         return ompt_event_implementation_status(event_name);
 
@@ -322,14 +333,14 @@ OMPT_API_ROUTINE int ompt_set_callback(ompt_event_t evid, ompt_callback_t cb)
 
 #undef ompt_event_macro
 
-    default: return ompt_set_result_registration_error;
+    default: return ompt_set_error;
     }
 }
 
 
-OMPT_API_ROUTINE int ompt_get_callback(ompt_event_t evid, ompt_callback_t *cb)
+OMPT_API_ROUTINE int ompt_get_callback(ompt_callbacks_t which, ompt_callback_t *callback)
 {
-    switch (evid) {
+    switch (which) {
 
 #define ompt_event_macro(event_name, callback_type, event_id)                  \
     case event_name:                                                           \
@@ -337,7 +348,7 @@ OMPT_API_ROUTINE int ompt_get_callback(ompt_event_t evid, ompt_callback_t *cb)
             ompt_callback_t mycb =                                             \
                 (ompt_callback_t) ompt_callbacks.ompt_callback(event_name);    \
             if (mycb) {                                                        \
-                *cb = mycb;                                                    \
+                *callback = mycb;                                              \
                 return ompt_get_callback_success;                              \
             }                                                                  \
         }                                                                      \
@@ -356,27 +367,14 @@ OMPT_API_ROUTINE int ompt_get_callback(ompt_event_t evid, ompt_callback_t *cb)
  * parallel regions
  ****************************************************************************/
 
-OMPT_API_ROUTINE ompt_parallel_id_t ompt_get_parallel_id(int ancestor_level)
+OMPT_API_ROUTINE int ompt_get_parallel_info(int ancestor_level, ompt_data_t **parallel_data, int *team_size)
 {
-    return __ompt_get_parallel_id_internal(ancestor_level);
+    return __ompt_get_parallel_info_internal(ancestor_level, parallel_data, team_size);
 }
 
-
-OMPT_API_ROUTINE int ompt_get_parallel_team_size(int ancestor_level)
+OMPT_API_ROUTINE ompt_state_t ompt_get_state(ompt_wait_id_t *wait_id)
 {
-    return __ompt_get_parallel_team_size_internal(ancestor_level);
-}
-
-
-OMPT_API_ROUTINE void *ompt_get_parallel_function(int ancestor_level)
-{
-    return __ompt_get_parallel_function_internal(ancestor_level);
-}
-
-
-OMPT_API_ROUTINE ompt_state_t ompt_get_state(ompt_wait_id_t *ompt_wait_id)
-{
-    ompt_state_t thread_state = __ompt_get_state_internal(ompt_wait_id);
+    ompt_state_t thread_state = __ompt_get_state_internal(wait_id);
 
     if (thread_state == ompt_state_undefined) {
         thread_state = ompt_state_work_serial;
@@ -386,46 +384,26 @@ OMPT_API_ROUTINE ompt_state_t ompt_get_state(ompt_wait_id_t *ompt_wait_id)
 }
 
 
-
-/*****************************************************************************
- * threads
- ****************************************************************************/
-
-
-OMPT_API_ROUTINE void *ompt_get_idle_frame()
-{
-    return __ompt_get_idle_frame_internal();
-}
-
-
-
 /*****************************************************************************
  * tasks
  ****************************************************************************/
 
 
-OMPT_API_ROUTINE ompt_thread_id_t ompt_get_thread_id(void)
+OMPT_API_ROUTINE ompt_thread_data_t* ompt_get_thread_data(void)
 {
-    return __ompt_get_thread_id_internal();
+    return __ompt_get_thread_data_internal();
 }
 
-OMPT_API_ROUTINE ompt_task_id_t ompt_get_task_id(int depth)
+OMPT_API_ROUTINE int ompt_get_task_info(
+    int ancestor_level,
+    ompt_task_type_t *type,
+    ompt_data_t **task_data,
+    ompt_frame_t **task_frame,
+    ompt_data_t **parallel_data,
+    int *thread_num)
 {
-    return __ompt_get_task_id_internal(depth);
+    return __ompt_get_task_info_internal(ancestor_level, type, task_data, task_frame, parallel_data, thread_num);
 }
-
-
-OMPT_API_ROUTINE ompt_frame_t *ompt_get_task_frame(int depth)
-{
-    return __ompt_get_task_frame_internal(depth);
-}
-
-
-OMPT_API_ROUTINE void *ompt_get_task_function(int depth)
-{
-    return __ompt_get_task_function_internal(depth);
-}
-
 
 /*****************************************************************************
  * placeholders
@@ -498,7 +476,6 @@ OMPT_API_ROUTINE int ompt_get_ompt_version()
 }
 
 
-
 /*****************************************************************************
  * application-facing API
  ****************************************************************************/
@@ -513,6 +490,16 @@ _OMP_EXTERN void ompt_control(uint64_t command, uint64_t modifier)
     if (ompt_enabled && ompt_callbacks.ompt_callback(ompt_event_control)) {
         ompt_callbacks.ompt_callback(ompt_event_control)(command, modifier);
     }
+}
+
+/*****************************************************************************
+ * misc
+ ****************************************************************************/
+
+
+OMPT_API_ROUTINE uint64_t ompt_get_unique_id(void)
+{
+    return __ompt_get_unique_id_internal();
 }
 
 
@@ -533,3 +520,4 @@ static ompt_interface_fn_t ompt_fn_lookup(const char *s)
 
     return (ompt_interface_fn_t) 0;
 }
+

@@ -13,6 +13,9 @@
 #include "kmp_i18n.h"
 #include "kmp_io.h"
 #include "kmp_str.h"
+#if OMPT_SUPPORT
+#include "ompt-specific.h"
+#endif
 
 #if OMP_40_ENABLED
 
@@ -53,6 +56,24 @@ kmp_int32 __kmpc_cancel(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 cncl_kind) {
                     //       this_team->t.t_cancel_request, &(this_team->t.t_cancel_request));
                     // we do not have a cancellation request in this team or we do have one
                     // that matches the current request -> cancel
+                    #if OMPT_SUPPORT && OMPT_OPTIONAL
+                            if (ompt_enabled &&
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)) {
+                                ompt_task_data_t *task_data;
+                                __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+                                ompt_cancel_flag_t type;
+                                if(cncl_kind == cancel_parallel)
+                                    type = ompt_cancel_parallel;
+                                else if(cncl_kind == cancel_loop)
+                                    type = ompt_cancel_do;
+                                else if(cncl_kind == cancel_sections)
+                                    type = ompt_cancel_sections;
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)(
+                                    task_data,
+                                    type | ompt_cancel_activated,
+                                    OMPT_GET_RETURN_ADDRESS(0));
+                            }
+                    #endif
                     return 1 /* true */;
                 }
                 break;
@@ -73,6 +94,17 @@ kmp_int32 __kmpc_cancel(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 cncl_kind) {
                     if (old == cancel_noreq || old == cncl_kind) {
                         // we do not have a cancellation request in this taskgroup or we do have one
                         // that matches the current request -> cancel
+                        #if OMPT_SUPPORT && OMPT_OPTIONAL
+                            if (ompt_enabled &&
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)) {
+                                ompt_task_data_t *task_data;
+                                __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)(
+                                    task_data,
+                                    ompt_cancel_taskgroup | ompt_cancel_activated,
+                                    OMPT_GET_RETURN_ADDRESS(0));
+                            }
+                        #endif
                         return 1 /* true */;
                     }
                 }
@@ -129,6 +161,24 @@ kmp_int32 __kmpc_cancellationpoint(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 c
                     if (cncl_kind == this_team->t.t_cancel_request) {
                         // the request in the team structure matches the type of
                         // cancellation point so we can cancel
+                        #if OMPT_SUPPORT && OMPT_OPTIONAL
+                            if (ompt_enabled &&
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)) {
+                                ompt_task_data_t *task_data;
+                                __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+                                ompt_cancel_flag_t type;
+                                if(cncl_kind == cancel_parallel)
+                                    type = ompt_cancel_parallel;
+                                else if(cncl_kind == cancel_loop)
+                                    type = ompt_cancel_do;
+                                else if(cncl_kind == cancel_sections)
+                                    type = ompt_cancel_sections;
+                                ompt_callbacks.ompt_callback(ompt_callback_cancel)(
+                                    task_data,
+                                    type | ompt_cancel_detected,
+                                    OMPT_GET_RETURN_ADDRESS(0));
+                            }
+                        #endif
                         return 1 /* true */;
                     }
                     KMP_ASSERT( 0 /* false */);
@@ -154,6 +204,17 @@ kmp_int32 __kmpc_cancellationpoint(ident_t* loc_ref, kmp_int32 gtid, kmp_int32 c
                 if (taskgroup) {
                     // return the current status of cancellation for the
                     // taskgroup
+                    #if OMPT_SUPPORT && OMPT_OPTIONAL
+                        if (ompt_enabled && !!taskgroup->cancel_request &&
+                            ompt_callbacks.ompt_callback(ompt_callback_cancel)) {
+                            ompt_task_data_t *task_data;
+                            __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+                            ompt_callbacks.ompt_callback(ompt_callback_cancel)(
+                                task_data,
+                                ompt_cancel_taskgroup | ompt_cancel_detected,
+                                OMPT_GET_RETURN_ADDRESS(0));
+                        }
+                    #endif
                     return !!taskgroup->cancel_request;
                 }
                 else {
