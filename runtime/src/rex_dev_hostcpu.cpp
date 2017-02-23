@@ -58,15 +58,18 @@ void *rex_memcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_de
     return memcpy((void *) dest, (const void *) src, size);
 }
 
-void *rex_asyncmemcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size) {
-    return memcpy((void *) dest, (const void *) src, size);
+int rex_asyncmemcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size) {
+    memcpy((void *) dest, (const void *) src, size);
+    return 0;
 }
 
-void *rex_asyncmemcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size) {
-    return memcpy((void *) dest, (const void *) src, size);
+int rex_asyncmemcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size) {
+    memcpy((void *) dest, (const void *) src, size);
+    return 0;
 }
 
-void *rex_asyncmemcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size) {
-    return memcpy((void *) dest, (const void *) src, size);
+int rex_asyncmemcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size) {
+    memcpy((void *) dest, (const void *) src, size);
+    return 0;
 }
 

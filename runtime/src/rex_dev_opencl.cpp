@@ -124,3 +124,26 @@ void rex_fini_dev_opencl(rex_device_t * dev) {
     clReleaseCommandQueue(*((cl_command_queue*)dev->default_stream));
     clReleaseContext((cl_context)dev->default_context);
 }
+
+/** stream related APIs for opencl */
+void rex_stream_create_opencl(rex_device_t *dev, rex_dev_stream_t *stream) {
+    // Create a command queue
+    cl_command_queue queue;           // command queue
+    cl_context context = (cl_context)dev->default_context;
+    cl_int err;
+    queue = clCreateCommandQueue(context, (cl_device_id)dev->properties, 0, &err);
+    *stream = queue;
+}
+
+/**
+ * sync device by syncing the stream so all the pending calls the stream are completed
+ *
+ * if destroy_stream != 0; the stream will be destroyed.
+ */
+void rex_stream_sync_opencl(rex_dev_stream_t stream) {
+    clFinish((cl_command_queue)stream);
+}
+
+void rex_stream_destroy_opencl(rex_dev_stream_t stream) {
+    clReleaseCommandQueue((cl_command_queue(stream)));
+}

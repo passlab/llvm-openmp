@@ -1062,9 +1062,9 @@ extern void *rex_memcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const v
 extern void *rex_memcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
 extern void *rex_memcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size);
 
-extern void *rex_asyncmemcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
-extern void *rex_asyncmemcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
-extern void *rex_asyncmemcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+extern int rex_asyncmemcpy_btw_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern int rex_asyncmemcpy_to_hostcpu(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern int rex_asyncmemcpy_from_hostcpu(void *dest, const void *src, rex_device_t * src_dev, size_t size);
 
 /** datamap mm for thsim, in rex_dev_thsim.cpp **/
 extern void *rex_malloc_thsim(rex_device_t * dev, size_t size);
@@ -1074,9 +1074,21 @@ extern void *rex_memcpy_btw_thsim(void *dest, rex_device_t * dest_dev, const voi
 extern void *rex_memcpy_to_thsim(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
 extern void *rex_memcpy_from_thsim(void *dest, const void *src, rex_device_t * src_dev, size_t size);
 
-extern void *rex_asyncmemcpy_btw_thsim(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
-extern void *rex_asyncmemcpy_to_thsim(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
-extern void *rex_asyncmemcpy_from_thsim(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+extern int rex_asyncmemcpy_btw_thsim(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern int rex_asyncmemcpy_to_thsim(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern int rex_asyncmemcpy_from_thsim(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+
+/** datamap mm for nvcuda, in rex_dev_nvcuda.cpp **/
+extern void *rex_malloc_nvcuda(rex_device_t * dev, size_t size);
+extern void rex_free_nvcuda(rex_device_t * dev, void *ptr);
+
+extern void *rex_memcpy_btw_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size);
+extern void *rex_memcpy_to_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, size_t size);
+extern void *rex_memcpy_from_nvcuda(void *dest, const void *src, rex_device_t * src_dev, size_t size);
+
+extern int rex_asyncmemcpy_btw_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size, rex_dev_stream_t stream);
+extern int rex_asyncmemcpy_to_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, size_t size, rex_dev_stream_t stream);
+extern int rex_asyncmemcpy_from_nvcuda(void *dest, const void *src, rex_device_t * src_dev, size_t size, rex_dev_stream_t stream);
 
 #if 0
 extern void rex_print_homp_usage();

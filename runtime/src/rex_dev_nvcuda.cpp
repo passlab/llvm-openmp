@@ -63,3 +63,101 @@ void rex_fini_dev_nvcuda(rex_device_t *dev) {
     free(dev->dev_properties);
 }
 
+
+/* nvcuda specific datamap mm APIs */
+void *rex_malloc_nvcuda(rex_device_t * dev, size_t size) {
+	void * ptr = NULL;
+	ptr = malloc(size);
+	cudaError_t errno = cudaMalloc(&ptr, size);
+	devcall_nvgpu_cuda_assert(errno);
+
+	return ptr;
+}
+
+void rex_free_nvcuda(rex_device_t * dev, void *ptr) {
+	cudaError_t result = cudaFree(ptr);
+	devcall_nvgpu_cuda_assert(result);
+}
+
+void *rex_memcpy_btw_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size) {
+	cudaError_t result;
+	result = cudaMemcpy((void *)dest,(const void *)src, size, cudaMemcpyDeviceToDevice);
+//		result = cudaMemcpyPeer(dst, dstdev->sysid, src, srcdev->sysid, size);
+	devcall_nvgpu_cuda_assert(result);
+	return dest;
+}
+
+void *rex_memcpy_to_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, size_t size) {
+	cudaError_t result;
+	result = cudaMemcpy((void *)dest,(const void *)src, size, cudaMemcpyHostToDevice);
+	devcall_nvgpu_cuda_assert(result);
+
+	return dest;
+}
+
+void *rex_memcpy_from_nvcuda(void *dest, const void *src, rex_device_t * src_dev, size_t size) {
+	cudaError_t result;
+	result = cudaMemcpy((void *)dest,(const void *)src, size, cudaMemcpyDeviceToHost);
+	devcall_nvgpu_cuda_assert(result);
+	return dest;
+}
+
+int rex_asyncmemcpy_btw_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, rex_device_t * src_dev, size_t size, rex_dev_stream_t stream) {
+	cudaError_t result;
+	result = cudaMemcpyAsync((void *)dest,(const void *)src, size, cudaMemcpyDeviceToDevice, cudaStream_t(stream));
+	//result = cudaMemcpyPeerAsync(dst, dstdev->sysid, src, srcdev->sysid, size, srcstream->systream.cudaStream);
+	devcall_nvgpu_cuda_assert(result);
+	return 0;
+}
+
+int rex_asyncmemcpy_to_nvcuda(void *dest, rex_device_t * dest_dev, const void *src, size_t size, rex_dev_stream_t stream) {
+	cudaError_t result;
+	result = cudaMemcpyAsync((void *)dest,(const void *)src, size, cudaMemcpyHostToDevice, cudaStream_t(stream));
+	devcall_nvgpu_cuda_assert(result);
+	return 0;
+}
+
+int rex_asyncmemcpy_from_nvcuda(void *dest, const void *src, rex_device_t * src_dev, size_t size, rex_dev_stream_t stream) {
+	cudaError_t result;
+	result = cudaMemcpyAsync((void *)dest,(const void *)src,size, cudaMemcpyDeviceToHost, cudaStream_t(stream));
+//	printf("memcpyfrom_async: dev: %d, %X->%X\n", srcdev->id, src, dst);
+	devcall_nvgpu_cuda_assert(result);
+	return 0;
+}
+
+int rex_enable_memcpy_btw_nvcuda(rex_device_t *destdev, rex_device_t *srcdev) {
+	int can_access = 0;
+	cudaError_t result;
+	result = cudaDeviceCanAccessPeer(&can_access, srcdev->sysid, destdev->sysid);
+	devcall_nvgpu_cuda_assert(result);
+	if (can_access) {
+		result = cudaDeviceEnablePeerAccess(destdev->sysid, 0);
+		if(result != cudaErrorPeerAccessAlreadyEnabled) {
+			return 0;
+		} else return 1;
+	} else return 1;
+}
+
+/** stream related APIs for nvcuda */
+void rex_stream_create_nvcuda(rex_device_t *d, rex_dev_stream_t *stream) {
+	cudaError_t result;
+	result = cudaStreamCreateWithFlags((cudaStream_t *)stream, cudaStreamNonBlocking);
+	devcall_nvgpu_cuda_assert(result);
+}
+
+/**
+ * sync device by syncing the stream so all the pending calls the stream are completed
+ *
+ * if destroy_stream != 0; the stream will be destroyed.
+ */
+void rex_stream_sync_nvcuda(rex_dev_stream_t stream) {
+	cudaError_t result;
+	result = cudaStreamSynchronize((cudaStream_t)stream);
+	devcall_nvgpu_cuda_assert(result);
+}
+
+void rex_stream_destroy_nvcuda(rex_dev_stream_t stream) {
+	cudaError_t result;
+	result = cudaStreamDestroy(cudaStream_t(stream));
+	devcall_nvgpu_cuda_assert(result);
+}
