@@ -180,18 +180,24 @@ static void rex_read_device_spec(char *dev_spec_file) {
         if (strcasecmp(devtype, "cpu") == 0 || strcasecmp(devtype, "hostcpu") == 0) {
             rex_init_dev_hostcpu(dev, devid, devsysid, num_cores);
             num_hostcpu_dev += num_devs;
+#ifdef REX_NVCUDA_SUPPORT
         } else if (strcasecmp(devtype, "nvgpu") == 0) {
             rex_init_dev_nvcuda(dev, devid, devsysid);
             num_nvgpu_dev += num_devs;
+#endif
         } else if (strcasecmp(devtype, "thsim") == 0) {
             rex_init_dev_thsim(dev, devid, devsysid, num_cores);
             num_thsim_dev += num_devs;
+#ifdef REX_ITLGPU_SUPPORT
         } else if (strcasecmp(devtype, "itlgpu") == 0) {
             rex_init_dev_opencl(dev, devid, devsysid, num_cores);
             num_itlgpu_dev += num_devs;
+#endif
+#ifdef REX_ITLMIC_SUPPORT
         } else if (strcasecmp(devtype, "itlmic") == 0) {
             rex_init_dev_micomp(dev, devid, devsysid, num_cores);
             num_itlmic_dev += num_devs;
+#endif
         } else {
             printf("unknow device type error: %s \n, default to be hostcpu\n", devtype);
             /* unknow device type error */
@@ -309,15 +315,21 @@ void rex_fini_devices() {
             case REX_DEVICE_HOSTCPU_KMP :
                 rex_fini_dev_hostcpu(dev);
                 break;
+#ifdef REX_NVCUDA_SUPPORT
             case REX_DEVICE_NVGPU_CUDA :
                 rex_fini_dev_nvcuda(dev);
                 break;
+#endif
+#ifdef REX_ITLMIC_SUPPORT
             case REX_DEVICE_ITLMIC_OPENMP :
                 rex_fini_dev_micomp(dev);
                 break;
+#endif
+#ifdef REX_ITLGPU_SUPPORT
             case REX_DEVICE_ITLGPU_OPENCL :
                 rex_fini_dev_opencl(dev);
                 break;
+#endif
             default :
                 break;
         }
