@@ -47,6 +47,7 @@ typedef struct {
 typedef struct ompt_lw_taskteam_s {
     ompt_team_info_t    ompt_team_info;
     ompt_task_info_t    ompt_task_info;
+    int			heap;
     struct ompt_lw_taskteam_s *parent;
 } ompt_lw_taskteam_t;
 
@@ -96,8 +97,8 @@ void ompt_fini(void);
   #define OMPT_GET_FRAME_ADDRESS(level) __ompt_get_frame_address_internal(level)
 #else
   void* __ompt_get_return_address_backtrace(int level);
-//  #define OMPT_GET_RETURN_ADDRESS(level) __builtin_return_address(level)
-  #define OMPT_GET_RETURN_ADDRESS(level) __ompt_get_return_address_backtrace(level)
+  #define OMPT_GET_RETURN_ADDRESS(level) __builtin_return_address(level)
+//  #define OMPT_GET_RETURN_ADDRESS(level) __ompt_get_return_address_backtrace(level)
   #define OMPT_GET_FRAME_ADDRESS(level) __builtin_frame_address(level)
 #endif
 

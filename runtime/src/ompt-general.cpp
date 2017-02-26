@@ -485,10 +485,25 @@ OMPT_API_ROUTINE int ompt_get_ompt_version()
  | control
  ---------------------------------------------------------------------------*/
 
-_OMP_EXTERN void ompt_control(uint64_t command, uint64_t modifier)
+_OMP_EXTERN int omp_control_tool(uint64_t command, uint64_t modifier, void *arg)
 {
-    if (ompt_enabled && ompt_callbacks.ompt_callback(ompt_event_control)) {
-        ompt_callbacks.ompt_callback(ompt_event_control)(command, modifier);
+    if(ompt_enabled){
+        if (ompt_callbacks.ompt_callback(ompt_callback_control_tool)) {
+            return ompt_callbacks.ompt_callback(ompt_callback_control_tool)(
+                command,
+                modifier,
+                arg,
+                OMPT_GET_RETURN_ADDRESS(0));
+        }
+        else {
+            //TODO: replace hardcoded number by enum entry
+            return -1;
+        }
+    }
+    else {
+        //TODO: return value?
+        //TODO: replace hardcoded number by enum entry
+        return -2;
     }
 }
 
@@ -512,7 +527,8 @@ static ompt_interface_fn_t ompt_fn_lookup(const char *s)
 {
 
 #define ompt_interface_fn(fn) \
-    if (strcmp(s, #fn) == 0) return (ompt_interface_fn_t) fn;
+    fn##_t fn##_f = fn; \
+    if (strcmp(s, #fn) == 0) return (ompt_interface_fn_t) fn##_f;
 
     FOREACH_OMPT_INQUIRY_FN(ompt_interface_fn)
 

@@ -2,10 +2,10 @@
 // REQUIRES: ompt
 #include "callback.h"
 #include <omp.h> 
-#include <unistd.h>  
 
 int main()
 {
+  int condition=0;
   omp_set_nested(0);
   print_frame(0);
   #pragma omp parallel num_threads(2)
@@ -17,14 +17,15 @@ int main()
     #pragma omp master
     {
       print_ids(0);
-      #pragma omp task
+      #pragma omp task shared(condition)
       {
+        OMPT_SIGNAL(condition);
         print_frame(1);
         print_ids(0);
         print_ids(1);
         print_ids(2);
       }
-      sleep(1);
+      OMPT_WAIT(condition,1);
       print_ids(0);
     }
     print_ids(0);
@@ -32,17 +33,14 @@ int main()
 
 
   // Check if libomp supports the callbacks for this test.
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_parallel_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_parallel_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_task_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_task_switch'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_task_end'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_task_create'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_task_schedule'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_begin'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_end'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_implicit_task'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquire'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquired'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_released'
 
 
   // CHECK: {{^}}0: NULL_POINTER=[[NULL:.*$]]
@@ -75,7 +73,7 @@ int main()
   // CHECK: {{^}}[[THREAD_ID]]: ompt_event_task_schedule: first_task_id=[[IMPLICIT_TASK_ID]], second_task_id=[[TASK_ID]]
   // CHECK: {{^}}[[THREAD_ID]]: __builtin_frame_address(1)=[[TASK_EXIT:0x[0-f]+]]
   // CHECK: {{^}}[[THREAD_ID]]: task level 0: parallel_id=[[PARALLEL_ID]], task_id=[[TASK_ID]], exit_frame=[[TASK_EXIT]], reenter_frame=[[NULL]]
-  // CHECK: {{^}}[[THREAD_ID]]: task level 1: parallel_id=0, task_id=[[IMPLICIT_TASK_ID]], exit_frame=[[NULL]], reenter_frame=[[NULL]]
+  // CHECK: {{^}}[[THREAD_ID]]: task level 1: parallel_id=[[PARALLEL_ID]], task_id=[[IMPLICIT_TASK_ID]], exit_frame=[[NULL]], reenter_frame=[[NULL]]
   // CHECK: {{^}}[[THREAD_ID]]: task level 2: parallel_id=0, task_id=[[PARENT_TASK_ID]], exit_frame=[[NULL]], reenter_frame=[[MAIN_REENTER]]
   // CHECK: {{^}}[[THREAD_ID]]: ompt_event_task_schedule: first_task_id=[[TASK_ID]], second_task_id=[[IMPLICIT_TASK_ID]]
   // CHECK: {{^}}[[THREAD_ID]]: ompt_event_task_end: task_id=[[TASK_ID]]

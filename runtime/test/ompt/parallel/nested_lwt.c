@@ -9,6 +9,7 @@
 int main()
 {
   omp_set_nested(1);
+  int condition;
 
   #pragma omp parallel num_threads(4)
   {
@@ -29,7 +30,8 @@ int main()
         print_ids(1);
         print_ids(2);
         print_ids(3);
-        sleep(1);
+      OMPT_SIGNAL(condition);
+      OMPT_WAIT(condition,16);
       }
     }
   }
@@ -37,12 +39,10 @@ int main()
   // Check if libomp supports the callbacks for this test.
   // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_begin'
   // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_end'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_implicit_task'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquire'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquired'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_released'
 
   // CHECK: 0: NULL_POINTER=[[NULL:.*$]]
   // CHECK: {{^}}[[MASTER_ID:[0-9]+]]: ompt_event_parallel_begin: parent_task_id=[[PARENT_TASK_ID:[0-9]+]], parent_task_frame.exit=[[NULL]], parent_task_frame.reenter={{0x[0-f]+}}, parallel_id=[[PARALLEL_ID:[0-9]+]], requested_team_size=4, parallel_function=0x{{[0-f]+}}, invoker=[[PARALLEL_INVOKER:[0-9]+]]

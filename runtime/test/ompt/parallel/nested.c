@@ -7,6 +7,7 @@
 
 int main()
 {
+  int condition=0;
   omp_set_nested(1);
   print_frame(0);
 
@@ -27,7 +28,8 @@ int main()
       print_ids(1);
       print_ids(2);
       print_frame(0);
-      sleep(1);
+      OMPT_SIGNAL(condition);
+      OMPT_WAIT(condition,16);
       #pragma omp barrier
       print_ids(0);
     }
@@ -38,12 +40,10 @@ int main()
   // Check if libomp supports the callbacks for this test.
   // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_begin'
   // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_parallel_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_implicit_task_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_barrier_end'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_begin'
-  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_event_wait_barrier_end'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_implicit_task'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquire'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_acquired'
+  // CHECK-NOT: {{^}}0: Could not register callback 'ompt_callback_mutex_released'
 
 
   // CHECK: 0: NULL_POINTER=[[NULL:.*$]]
