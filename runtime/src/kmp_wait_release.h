@@ -123,7 +123,6 @@ __ompt_implicit_task_end(kmp_info_t *this_thr, ompt_state_t ompt_state, ompt_tas
                     0,
                     ds_tid);
             }
-            pId->ptr=NULL;
 #if OMPT_OPTIONAL
             if (ompt_callbacks.ompt_callback(ompt_callback_idle)) {
                 ompt_callbacks.ompt_callback(ompt_callback_idle)(ompt_scope_begin);
@@ -233,8 +232,9 @@ THIS function is called from
                 tId = &(this_thr->th.th_current_task->ompt_task_info.task_data);
             }
         } else {        
-                pId = &(this_thr->th.ompt_thread_info.parallel_data);
-                tId = &(this_thr->th.th_current_task->ompt_task_info.task_data);
+//                pId = &(this_thr->th.ompt_thread_info.parallel_data);
+                pId = NULL;
+                tId = &(this_thr->th.ompt_thread_info.task_data);
         }
 #if OMPT_OPTIONAL
         if (ompt_entry_state == ompt_state_idle) {

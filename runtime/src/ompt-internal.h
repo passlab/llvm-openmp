@@ -61,11 +61,12 @@ typedef struct ompt_lw_taskteam_s {
 
 
 typedef struct {
-    ompt_thread_data_t  thread_data;
+    ompt_thread_data_t    thread_data;
     ompt_parallel_data_t  parallel_data; /* stored here from implicit barrier-begin until implicit-task-end */
-    ompt_state_t        state;
-    ompt_wait_id_t      wait_id;
-    void                *idle_frame;
+    ompt_task_data_t      task_data; /* stored here from implicit barrier-begin until implicit-task-end */
+    ompt_state_t          state;
+    ompt_wait_id_t        wait_id;
+    void                  *idle_frame;
 } ompt_thread_info_t;
 
 
@@ -101,6 +102,8 @@ void ompt_fini(void);
 //  #define OMPT_GET_RETURN_ADDRESS(level) __ompt_get_return_address_backtrace(level)
   #define OMPT_GET_FRAME_ADDRESS(level) __builtin_frame_address(level)
 #endif
+
+int __kmp_control_tool(uint64_t command, uint64_t modifier, void *arg);
 
 extern int ompt_enabled;
 

@@ -24,6 +24,13 @@ static const char* ompt_task_type_t_values[] = {
   "ompt_task_target"
 };
 
+static const char* ompt_task_status_t_values[] = {
+  NULL,
+  "ompt_task_complete",
+  "ompt_task_yield",
+  "ompt_task_cancel",
+  "ompt_task_others"
+};
 static const char* ompt_cancel_flag_t_values[] = {
   "ompt_cancel_parallel",
   "ompt_cancel_sections",
@@ -39,6 +46,11 @@ static ompt_get_task_info_t ompt_get_task_info;
 static ompt_get_thread_data_t ompt_get_thread_data;
 static ompt_get_parallel_info_t ompt_get_parallel_info;
 static ompt_get_unique_id_t ompt_get_unique_id;
+static ompt_get_num_places_t ompt_get_num_places;
+static ompt_get_place_proc_ids_t ompt_get_place_proc_ids;
+static ompt_get_place_num_t ompt_get_place_num;
+static ompt_get_partition_place_nums_t ompt_get_partition_place_nums;
+static ompt_get_proc_id_t ompt_get_proc_id;
 
 static void print_ids(int level)
 {
@@ -525,7 +537,7 @@ on_ompt_callback_task_schedule(
     ompt_task_status_t prior_task_status,
     ompt_task_data_t *second_task_data)
 {
-  printf("%" PRIu64 ": ompt_event_task_schedule: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 ", prior_task_status=%d\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value, prior_task_status);
+  printf("%" PRIu64 ": ompt_event_task_schedule: first_task_id=%" PRIu64 ", second_task_id=%" PRIu64 ", prior_task_status=%s=%d\n", ompt_get_thread_data()->value, first_task_data->value, second_task_data->value, ompt_task_status_t_values[prior_task_status], prior_task_status);
   if(prior_task_status == ompt_task_complete)
   {
     printf("%" PRIu64 ": ompt_event_task_end: task_id=%" PRIu64 "\n", ompt_get_thread_data()->value, first_task_data->value);
@@ -596,6 +608,12 @@ int ompt_initialize(
   ompt_get_thread_data = (ompt_get_thread_data_t) lookup("ompt_get_thread_data");
   ompt_get_parallel_info = (ompt_get_parallel_info_t) lookup("ompt_get_parallel_info");
   ompt_get_unique_id = (ompt_get_unique_id_t) lookup("ompt_get_unique_id");
+
+  ompt_get_num_places = (ompt_get_num_places_t) lookup("ompt_get_num_places");
+  ompt_get_place_proc_ids = (ompt_get_place_proc_ids_t) lookup("ompt_get_place_proc_ids");
+  ompt_get_place_num = (ompt_get_place_num_t) lookup("ompt_get_place_num");
+  ompt_get_partition_place_nums = (ompt_get_partition_place_nums_t) lookup("ompt_get_partition_place_nums");
+  ompt_get_proc_id = (ompt_get_proc_id_t) lookup("ompt_get_proc_id");
 
   register_callback(ompt_callback_mutex_acquire);
   register_callback_t(ompt_callback_mutex_acquired, ompt_callback_mutex_t);

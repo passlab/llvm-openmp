@@ -1,4 +1,4 @@
-// RUN:  %libomp-compile && env OMP_CANCELLATION=true %libomp-run | %sort-threads | FileCheck %s
+// RUN:  %libomp-compile && env OMP_CANCELLATION=true %libomp-run | %sort-threads | tee log.txt | FileCheck %s
 // REQUIRES: ompt
 
 #include "callback.h"
@@ -20,6 +20,7 @@ int main()
           printf("start execute task 1\n");
           OMPT_SIGNAL(condition);
           OMPT_WAIT(condition,2);
+          usleep(300); // master needs time to discard tasks 
           #pragma omp cancellation point taskgroup
           printf("end execute task 1\n");
         }
@@ -65,7 +66,7 @@ int main()
   // CHECK: {{^}}[[MASTER_ID]]: ompt_event_task_create: parent_task_id=[[PARENT_TASK_ID]], parent_task_frame.exit={{0x[0-f]*}}, parent_task_frame.reenter={{0x[0-f]*}}, new_task_id=[[THIRD_TASK_ID:[0-9]+]], parallel_function={{0x[0-f]*}}, task_type=ompt_task_explicit=3, has_dependences=no
 
   // CHECK: {{^}}[[MASTER_ID]]: ompt_event_task_create: parent_task_id=[[PARENT_TASK_ID]], parent_task_frame.exit={{0x[0-f]*}}, parent_task_frame.reenter={{0x[0-f]*}}, new_task_id=[[CANCEL_TASK_ID:[0-9]+]], parallel_function={{0x[0-f]*}}, task_type=ompt_task_explicit=3, has_dependences=no
-  // CHECK: {{^}}[[MASTER_ID]]: ompt_event_task_schedule: first_task_id=[[PARENT_TASK_ID]], second_task_id=[[CANCEL_TASK_ID]], prior_task_status=4
+  // CHECK: {{^}}[[MASTER_ID]]: ompt_event_task_schedule: first_task_id=[[PARENT_TASK_ID]], second_task_id=[[CANCEL_TASK_ID]], prior_task_status=ompt_task_others=4
 
   // CHECK: {{^}}[[MASTER_ID]]: ompt_event_cancel: task_data=[[CANCEL_TASK_ID]], flags=ompt_cancel_taskgroup|ompt_cancel_activated=24, codeptr_ra={{0x[0-f]*}}
   // CHECK: {{^}}[[MASTER_ID]]: ompt_event_cancel: task_data=[[THIRD_TASK_ID]], flags=ompt_cancel_taskgroup|ompt_cancel_discarded_task=72, codeptr_ra={{0x[0-f]*}}
