@@ -58,10 +58,13 @@
 
 #define ompt_callback_idle_implemented                  ompt_event_MAY_ALWAYS_OPTIONAL
 
+#define ompt_callback_idle_spin_implemented             ompt_event_MAY_ALWAYS_OPTIONAL
+
+#define ompt_callback_idle_suspend_implemented             ompt_event_MAY_ALWAYS_OPTIONAL
+
 #define ompt_callback_sync_region_wait_implemented      ompt_event_MAY_ALWAYS_OPTIONAL
 
 #define ompt_callback_mutex_released_implemented        ompt_event_MAY_ALWAYS_OPTIONAL
-
 
 /*----------------------------------------------------------------------------
  | Optional Events (synchronous events)

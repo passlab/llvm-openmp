@@ -17,6 +17,8 @@ if(${LIBOMP_OMPT_SUPPORT})
 endif()
 if(${LIBOMP_REX_SUPPORT})
   configure_file(${LIBOMP_SRC_DIR}/rex.h rex.h @ONLY)
+  configure_file(${LIBOMP_SRC_DIR}/ompt-internal.h ompt-internal.h @ONLY)
+  configure_file(${LIBOMP_SRC_DIR}/ompt-event-specific.h ompt-event-specific.h @ONLY)
 endif()
 
 # Generate message catalog files: kmp_i18n_id.inc and kmp_i18n_default.inc
@@ -337,6 +339,8 @@ if(${LIBOMP_OMPT_SUPPORT})
 endif()
 if(${LIBOMP_REX_SUPPORT})
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rex.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ompt-internal.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ompt-event-specific.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
 endif()
 if(${LIBOMP_FORTRAN_MODULES})
   install(FILES

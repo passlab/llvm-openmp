@@ -382,6 +382,17 @@ THIS function is called from
         }
 #endif
 
+#if OMPT_SUPPORT
+        if (ompt_enabled) {
+#if OMPT_OPTIONAL
+            if (ompt_callbacks.ompt_callback(ompt_callback_idle_spin)) {
+                ompt_callbacks.ompt_callback(ompt_callback_idle_spin)(NULL);
+            }
+        }
+#endif
+#endif
+        KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
+
         // Don't suspend if KMP_BLOCKTIME is set to "infinite"
         if (__kmp_dflt_blocktime == KMP_MAX_BLOCKTIME)
             continue;
@@ -399,6 +410,15 @@ THIS function is called from
             continue;
 #endif
 
+#if OMPT_SUPPORT
+        if (ompt_enabled) {
+#if OMPT_OPTIONAL
+            if (ompt_callbacks.ompt_callback(ompt_callback_idle_suspend)) {
+                ompt_callbacks.ompt_callback(ompt_callback_idle_suspend)(NULL);
+            }
+        }
+#endif
+#endif
         KF_TRACE(50, ("__kmp_wait_sleep: T#%d suspend time reached\n", th_gtid));
 
         flag->suspend(th_gtid);

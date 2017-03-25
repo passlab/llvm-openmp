@@ -133,10 +133,10 @@
                                                                                                                 \
     macro (ompt_callback_cancel, 		        ompt_callback_cancel_t,        28) /*cancel innermost binding region*/\
                                                                                                                 \
-                                                                                                                \
     /*--- Old Events --- */                                                                                     \
-    //macro (ompt_event_control,                  ompt_control_callback_t,       29) /* support control calls */  \
-
+    /* macro (ompt_event_control,                ompt_control_callback_t,     29) */ /* support control calls */  \
+    macro (ompt_callback_idle_spin,              ompt_callback_idle_spin_t,     29) /* support control calls */  \
+    macro (ompt_callback_idle_suspend,           ompt_callback_idle_suspend_t,  30) /* support control calls */  \
 
 
 
@@ -436,6 +436,14 @@ typedef void (*ompt_callback_master_t) (
 
 typedef void (*ompt_callback_idle_t) (
     ompt_scope_endpoint_t endpoint
+);
+
+typedef void (*ompt_callback_idle_spin_t) (
+    void * data
+);
+
+typedef void (*ompt_callback_idle_suspend_t) (
+        void * data
 );
 
 typedef enum ompt_work_type_e {
