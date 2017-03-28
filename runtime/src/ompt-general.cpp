@@ -11,7 +11,6 @@
 #include <execinfo.h>
 
 
-
 /*****************************************************************************
  * ompt include files
  ****************************************************************************/
@@ -413,7 +412,7 @@ OMPT_API_ROUTINE int ompt_get_task_info(
 OMPT_API_ROUTINE int ompt_get_num_places(void)
 {
     //copied from kmp_ftn_entry.h (but modified)
-    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
+    #if !KMP_AFFINITY_SUPPORTED
         return 0;
     #else
         if (!KMP_AFFINITY_CAPABLE())
@@ -428,10 +427,11 @@ OMPT_API_ROUTINE int ompt_get_place_proc_ids(
     int *ids)
 {
     //copied from kmp_ftn_entry.h (but modified)
-    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
+    #if !KMP_AFFINITY_SUPPORTED
         return 0;
     #else
-        int i,j,count;
+        int i,count;
+        int tmp_ids[ids_size];
         if (!KMP_AFFINITY_CAPABLE())
             return 0;
         if ( place_num < 0 || place_num >= (int)__kmp_affinity_num_masks )
@@ -443,17 +443,15 @@ OMPT_API_ROUTINE int ompt_get_place_proc_ids(
               (!KMP_CPU_ISSET(i, mask))) {
                 continue;
             }
+            if(count < ids_size)
+                tmp_ids[count] = i;
             count++;
         }
         if(ids_size >= count)
         {
-            j = 0;
-            KMP_CPU_SET_ITERATE(i, mask) {
-                if ((! KMP_CPU_ISSET(i, __kmp_affin_fullMask)) ||
-                  (!KMP_CPU_ISSET(i, mask))) {
-                    continue;
-                }
-                ids[j++] = i;
+            for(i = 0; i < count; i++)
+            {
+                ids[i] = tmp_ids[i];
             }
         }
         return count;
@@ -463,7 +461,7 @@ OMPT_API_ROUTINE int ompt_get_place_proc_ids(
 OMPT_API_ROUTINE int ompt_get_place_num(void)
 {
     //copied from kmp_ftn_entry.h (but modified)
-    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
+    #if !KMP_AFFINITY_SUPPORTED
         return -1;
     #else
         int gtid;
@@ -483,7 +481,7 @@ OMPT_API_ROUTINE int ompt_get_partition_place_nums(
     int *place_nums)
 {
     //copied from kmp_ftn_entry.h (but modified)
-    #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
+    #if !KMP_AFFINITY_SUPPORTED
         return 0;
     #else
         int i, gtid, place_num, first_place, last_place, start, end;
@@ -518,8 +516,11 @@ OMPT_API_ROUTINE int ompt_get_partition_place_nums(
 
 OMPT_API_ROUTINE int ompt_get_proc_id(void)
 {
-    //TODO
+#ifdef __linux__
+    return sched_getcpu();
+#else
     return -1;
+#endif
 }
 
 /*****************************************************************************
