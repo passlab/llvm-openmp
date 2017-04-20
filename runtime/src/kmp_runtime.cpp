@@ -33,6 +33,7 @@
 
 #ifdef REX_SUPPORT
 #include "rex.h"
+#include "rex_rauto/omptool.h"
 #endif
 
 /* these are temporary issues to be dealt with */
@@ -1488,6 +1489,11 @@ __kmp_fork_call(
     master_active = root->r.r_active;
     master_set_numthreads = master_th->th.th_set_nproc;
 
+#if REX_RAUTO_SUPPORT
+        int team_size = master_set_numthreads? master_set_numthreads : get__nproc_2( parent_team, master_tid );
+        on_rex_rauto_parallel_begin(team_size);
+#endif
+
 #if OMPT_SUPPORT
     ompt_parallel_data_t ompt_parallel_data;
     ompt_task_data_t *parent_task_data;
@@ -2571,6 +2577,11 @@ __kmp_join_call(ident_t *loc, int gtid
     if (ompt_enabled) {
         __kmp_join_ompt(master_th, parent_team, parallel_data, fork_context);
     }
+#endif
+
+
+#if REX_RAUTO_SUPPORT
+    on_rex_rauto_parallel_end();
 #endif
 
     KMP_MB();
@@ -3854,6 +3865,10 @@ __kmp_register_root( int initial_thread )
     KMP_MB();
     __kmp_release_bootstrap_lock( &__kmp_forkjoin_lock );
 
+#if REX_RAUTO_SUPPORT
+	on_rex_rauto_thread_begin(gtid);
+#endif
+
     return gtid;
 }
 
@@ -3940,6 +3955,10 @@ __kmp_reset_root(int gtid, kmp_root_t *root)
         ompt_callbacks.ompt_callback(ompt_callback_thread_end)) {
         ompt_callbacks.ompt_callback(ompt_callback_thread_end)(&(root->r.r_uber_thread->th.ompt_thread_info.thread_data));
     }
+#endif
+
+#if REX_RAUTO_SUPPORT
+    on_rex_rauto_thread_end(gtid);
 #endif
 
     TCW_4(__kmp_nth, __kmp_nth - 1); // __kmp_reap_thread will decrement __kmp_all_nth.
@@ -5553,6 +5572,10 @@ __kmp_launch_thread( kmp_info_t *this_thr )
     }
 #endif
 
+#if REX_RAUTO_SUPPORT
+    on_rex_rauto_thread_begin(gtid);
+#endif
+
 #if OMPT_SUPPORT
         if (ompt_enabled) {
             this_thr->th.ompt_thread_info.state = ompt_state_idle;
@@ -5639,6 +5662,10 @@ __kmp_launch_thread( kmp_info_t *this_thr )
         ompt_callbacks.ompt_callback(ompt_callback_thread_end)) {
         ompt_callbacks.ompt_callback(ompt_callback_thread_end)(thread_data);
     }
+#endif
+
+#if REX_RAUTO_SUPPORT
+    on_rex_rauto_thread_end(gtid);
 #endif
 
     this_thr->th.th_task_team = NULL;
@@ -5981,6 +6008,10 @@ __kmp_internal_end(void)
     __kmp_cleanup();
 #if OMPT_SUPPORT
     ompt_fini();
+#endif
+
+#ifdef REX_RAUTO_SUPPORT
+    rex_rauto_finalize();
 #endif
 }
 
@@ -6649,6 +6680,10 @@ __kmp_do_serial_initialize( void )
 
 #ifdef REX_SUPPORT
     rex_init_devices();
+#endif
+
+#ifdef REX_RAUTO_SUPPORT
+    rex_rauto_init();
 #endif
 
     KA_TRACE( 10, ("__kmp_do_serial_initialize: exit\n" ) );

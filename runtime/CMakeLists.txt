@@ -168,6 +168,12 @@ set(LIBOMP_USE_HWLOC FALSE CACHE BOOL
 set(LIBOMP_HWLOC_INSTALL_DIR /usr/local CACHE PATH
   "Install path for hwloc library")
 
+# PAPI support
+set(LIBOMP_USE_PAPI FALSE CACHE BOOL
+  "Use PAPI library for performance counter and measurement")
+set(LIBOMP_PAPI_INSTALL_DIR /usr/local CACHE PATH
+  "Install path for PAPI library")
+
 # Get the build number from kmp_version.cpp
 libomp_get_build_number("${CMAKE_CURRENT_SOURCE_DIR}" LIBOMP_VERSION_BUILD)
 math(EXPR LIBOMP_VERSION_BUILD_YEAR "${LIBOMP_VERSION_BUILD}/10000")
@@ -342,6 +348,11 @@ if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
 
+# Error check papi support after config-ix has run
+if(LIBOMP_USE_PAPI AND (NOT LIBOMP_HAVE_PAPI))
+  libomp_error_say("PAPI requested but not available")
+endif()
+
 # Setting final library name
 set(LIBOMP_DEFAULT_LIB_NAME libomp)
 if(${PROFILE_LIBRARY})
@@ -398,6 +409,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("Use PAPI library     -- ${LIBOMP_USE_PAPI}")
   libomp_say("REX runtime support  -- ${LIBOMP_REX_SUPPORT}")
   if(${LIBOMP_REX_SUPPORT})
     libomp_say("REX Version          -- ${REX_VERSION_MAJOR}.${REX_VERSION_MINOR}")

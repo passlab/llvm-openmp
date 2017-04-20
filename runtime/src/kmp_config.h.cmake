@@ -72,7 +72,15 @@
 #endif
 #cmakedefine01 LIBOMP_REX_SUPPORT
 #if LIBOMP_REX_SUPPORT
-#define REX_SUPPORT
+#define REX_SUPPORT 1
+#define REX_RAUTO_SUPPORT 1
+//#define PE_OPTIMIZATION_SUPPORT 1
+//#define PE_OPTIMIZATION_DVFS 1
+//#define OMPT_TRACING_SUPPORT 1
+#define OMPT_MEASUREMENT_SUPPORT 1
+//#define PE_MEASUREMENT_SUPPORT 1
+//#define PAPI_MEASUREMENT_SUPPORT 1
+//#define OMPT_ONLINE_TRACING_PRINT 1
 #endif
 
 // Configured cache line based on architecture

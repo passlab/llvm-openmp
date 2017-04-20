@@ -326,6 +326,7 @@ __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...)
 #if INCLUDE_SSC_MARKS
     SSC_MARK_FORKING();
 #endif
+
     __kmp_fork_call( loc, gtid, fork_context_intel,
             argc,
 #if OMPT_SUPPORT

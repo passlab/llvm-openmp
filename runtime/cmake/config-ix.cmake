@@ -266,6 +266,27 @@ if(${LIBOMP_USE_HWLOC})
   endif()
 endif()
 
+# Check if PAPI support is available
+if(${LIBOMP_USE_PAPI})
+  set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_PAPI_INSTALL_DIR}/include)
+  check_include_file(papi.h LIBOMP_HAVE_PAPI_H)
+  set(CMAKE_REQUIRED_INCLUDES)
+  find_library(LIBOMP_PAPI_LIBRARY
+    NAMES papi libpapi 
+    HINTS ${LIBOMP_PAPI_INSTALL_DIR}/lib)
+  if(LIBOMP_PAPI_LIBRARY)
+    check_library_exists(${LIBOMP_PAPI_LIBRARY} PAPI_library_init
+      ${LIBOMP_PAPI_INSTALL_DIR}/lib LIBOMP_HAVE_LIBPAPI)
+    get_filename_component(LIBOMP_PAPI_LIBRARY_DIR ${LIBOMP_PAPI_LIBRARY} PATH)
+  endif()
+  if(LIBOMP_HAVE_PAPI_H AND LIBOMP_HAVE_LIBPAPI AND LIBOMP_PAPI_LIBRARY)
+    set(LIBOMP_HAVE_PAPI TRUE)
+  else()
+    set(LIBOMP_HAVE_PAPI FALSE)
+    libomp_say("Could not find papi")
+  endif()
+endif()
+
 # Check if ThreadSanitizer support is available
 if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux" AND ${INTEL64})
   set(LIBOMP_HAVE_TSAN_SUPPORT TRUE)

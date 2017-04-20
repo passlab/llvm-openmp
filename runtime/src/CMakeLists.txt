@@ -56,6 +56,10 @@ if(${LIBOMP_USE_HWLOC})
   include_directories(${LIBOMP_HWLOC_INSTALL_DIR}/include)
 endif()
 
+if(${LIBOMP_USE_PAPI})
+  include_directories(${LIBOMP_PAPI_INSTALL_DIR}/include)
+endif()
+
 # Getting correct source files to build library
 set(LIBOMP_CFILES)
 set(LIBOMP_CXXFILES)
@@ -126,6 +130,10 @@ libomp_append(LIBOMP_CXXFILES rex_dev_micomp.cpp IF_TRUE LIBOMP_REX_ITLMIC_SUPPO
 #libomp_append(LIBOMP_CXXFILES rex_datamap.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_thirdparty/iniparser.c IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_thirdparty/dictionary.c IF_TRUE LIBOMP_REX_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_rauto/cpufreq.c IF_TRUE LIBOMP_REX_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_rauto/ompt_callback.c IF_TRUE LIBOMP_REX_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_rauto/omptool.c IF_TRUE LIBOMP_REX_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_rauto/pe_measurement.c IF_TRUE LIBOMP_REX_SUPPORT)
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
