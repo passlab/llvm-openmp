@@ -1493,8 +1493,9 @@ __kmp_fork_call(
     master_set_numthreads = master_th->th.th_set_nproc;
 
 #if REX_RAUTO_SUPPORT
-        int team_size = master_set_numthreads? master_set_numthreads : get__nproc_2( parent_team, master_tid );
-        on_rex_rauto_parallel_begin(team_size);
+    int team_size = master_set_numthreads? master_set_numthreads : get__nproc_2( parent_team, master_tid );
+    on_rex_rauto_parallel_begin(team_size); /* number of thread may be reset in this call when doing rauto_tuning */
+    master_set_numthreads = master_th->th.th_set_nproc;
 #endif
 
 #if OMPT_SUPPORT

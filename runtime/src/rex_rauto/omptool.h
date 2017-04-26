@@ -41,6 +41,7 @@ typedef struct ompt_measurement {
     double time_stamp;
     /* the configuration, e.g. number of threads, core frequency, etc when measuring */
     unsigned long frequency;
+    int requested_team_size;
     int team_size;
 #ifdef PE_MEASUREMENT_SUPPORT
     /* The trace record for power and energy info. We only need record for master thread, and we do not need pe tracing
@@ -70,7 +71,7 @@ typedef struct ompt_measurement {
 typedef struct ompt_trace_record {
     uint64_t uid;
     ompt_id_t thread_id_inteam;
-    int user_team_size; /* user setting of team size */
+    int requested_team_size; /* user setting of team size */
     int team_size;      /* the actual team size setting by the runtime/ompt */
     int event_id;
     short event_id_additional; /* additional info about the event, e.g. begin event of a callback_idle */
@@ -104,6 +105,7 @@ typedef struct ompt_lexgion {
 
     ompt_measurement_t accu;
     ompt_measurement_t best;
+    int best_counter; /* how many times the configuration for the best measurement has been used */
     ompt_measurement_t current;
 } ompt_lexgion_t;
 
@@ -177,6 +179,7 @@ extern void ompt_measure(ompt_measurement_t * me);
 extern void ompt_measure_consume(ompt_measurement_t * me);
 extern void ompt_measure_diff(ompt_measurement_t * consumed, ompt_measurement_t * begin_me, ompt_measurement_t * end_me);
 extern void ompt_measure_accu(ompt_measurement_t * accu, ompt_measurement_t * me);
+extern int ompt_measure_compare(ompt_measurement_t * best, ompt_measurement_t * current);
 extern void ompt_measure_print(ompt_measurement_t * me);
 extern void ompt_measure_print_header(ompt_measurement_t * me);
 

@@ -91,12 +91,12 @@ void link_records(ompt_trace_record_t * begin, ompt_trace_record_t * end) {
 void push_lexgion(thread_event_map_t * emap, ompt_lexgion_t * lgp) {
     emap->innermost_lexgion++;
     emap->lexgion_stack[emap->innermost_lexgion] = lgp;
-    //printf("lexgion begin: %X at %d\n", lgp, emap->innermost_lexgion);
+//    printf("lexgion begin: %X at %d\n", lgp, emap->innermost_lexgion);
 }
 
 ompt_lexgion_t * pop_lexgion(thread_event_map_t *emap) {
     ompt_lexgion_t * recent = emap->lexgion_stack[emap->innermost_lexgion];
-   // printf("lexgion end: %X at %d\n", emap->lexgion_stack[emap->innermost_lexgion], emap->innermost_lexgion);
+//    printf("lexgion end: %X at %d\n", recent, emap->innermost_lexgion);
     emap->innermost_lexgion--;
     return recent;
 }
@@ -309,6 +309,17 @@ void ompt_measure_diff(ompt_measurement_t * consumed, ompt_measurement_t * begin
     for (i=0; i<end_me->num_papi_events; i++)
         consumed->papi_counter[i] = end_me->papi_counter[i] - begin_me->papi_counter[i];
 #endif
+}
+
+/**
+ * Compare two measurement according to either performance, energy or EDP.
+ * The function returns the percentage of (best - current)/best in integer
+ * @param best
+ * @param current
+ */
+int ompt_measure_compare(ompt_measurement_t * best, ompt_measurement_t * current) {
+    double diff = best->time_stamp - current->time_stamp;
+    return (int)(100.0 * diff/best->time_stamp);
 }
 
 void ompt_measure_accu(ompt_measurement_t * accu, ompt_measurement_t * me) {

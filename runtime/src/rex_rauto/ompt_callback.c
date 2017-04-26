@@ -109,6 +109,7 @@ static void on_ompt_callback_idle(
         }
     }
 }
+#define REX_RAUTO_TUNING 1
 
 void on_rex_rauto_parallel_begin(uint32_t requested_team_size) {
     const void *codeptr_ra  =  OMPT_GET_RETURN_ADDRESS(2); /* address of the function who calls __kmpc_fork_call */
@@ -117,24 +118,60 @@ void on_rex_rauto_parallel_begin(uint32_t requested_team_size) {
     thread_event_map_t * emap = &event_maps[thread_id];
     ompt_lexgion_t * lgp = ompt_lexgion_begin(emap, codeptr_ra);
     push_lexgion(emap, lgp);
+    int team_size = requested_team_size;
+    int diff;
 #ifdef OMPT_MEASUREMENT_SUPPORT
     if (lgp->total_record == 1) { /* the first record */
         ompt_measure_init(&lgp->current);
         memset(&lgp->accu, 0, sizeof(ompt_measurement_t));
+    } else {
+#ifdef REX_RAUTO_TUNING
+        if (lgp->current.requested_team_size == requested_team_size) { /* if we are executing the parallel lexgion of the same problem size */
+            if (lgp->total_record == 2) { /* second time, tuning started */
+                    memcpy(&lgp->best, &lgp->current, sizeof(ompt_measurement_t));
+                    lgp->best_counter = 1;
+                    team_size = requested_team_size - 1;
+                    if (team_size <= 0) team_size = 1;
+                    __kmp_push_num_threads(NULL, thread_id, team_size);
+            } else {
+                if (lgp->best_counter < 5) { /* we will keep auto-tuning for at least 5 times */
+                    diff = ompt_measure_compare(&lgp->best, &lgp->current);
+                    //printf("perf improvement of last one over the best: %d%%\n", diff);
+                    if (diff >= 0){ /* the second time, or better performance */
+                        memcpy(&lgp->best, &lgp->current, sizeof(ompt_measurement_t));
+                        lgp->best_counter = 1;
+                        team_size = lgp->current.team_size - 1;
+                        if (team_size <= 0) team_size = 1;
+                        __kmp_push_num_threads(NULL, thread_id, team_size);
+                        printf("set team size for %X: %d->%d, improvement %d%%\n", codeptr_ra, requested_team_size, team_size, diff);
+                    } else {
+                        team_size = lgp->best.team_size;
+                        lgp->best_counter++;
+                        __kmp_push_num_threads(NULL, thread_id, team_size);
+                    }
+                } else {
+                    team_size = lgp->best.team_size;
+                    lgp->best_counter++;
+                    __kmp_push_num_threads(NULL, thread_id, team_size);
+                    //printf("No tune anymore for this lexgion: %X, at count: %d\n", codeptr_ra, lgp->total_record);
+                }
+            }
+        }
+#endif
     }
+    lgp->current.requested_team_size = requested_team_size;
+    lgp->current.team_size = team_size;
 #endif
 
 #ifdef OMPT_TRACING_SUPPORT
     ompt_trace_record_t *record = add_trace_record(thread_id, ompt_callback_parallel_begin, frame, codeptr_ra);
     add_record_lexgion(lgp, record);
-    record->user_team_size = requested_team_size;
+    //
+    record->requested_team_size = requested_team_size;
+    record->team_size = team_size;
+    record->codeptr_ra = codeptr_ra;
     //record->user_frame = OMPT_GET_FRAME_ADDRESS(0); /* the frame of the function who calls __kmpc_fork_call */
 //    record->user_frame = parent_task_frame->reenter_runtime_frame;
-    record->codeptr_ra = codeptr_ra;
-    record->team_size = record->user_team_size;
-    if (record->team_size != record->user_team_size) {
-        //omp_set_num_threads(record->team_size);
-    }
 #endif
 
 #ifdef OMPT_MEASUREMENT_SUPPORT
@@ -154,6 +191,9 @@ void on_rex_rauto_parallel_end() {
 #ifdef OMPT_MEASUREMENT_SUPPORT
     ompt_measure_consume(&lgp->current);
     ompt_measure_accu(&lgp->accu, &lgp->current);
+    if (lgp->current.team_size != lgp->current.requested_team_size) {
+        omp_set_num_threads(lgp->current.requested_team_size);
+    }
 #endif
 
     const void *codeptr_ra  =  OMPT_GET_RETURN_ADDRESS(2); /* address of the function who calls __kmpc_fork_call */
@@ -163,9 +203,6 @@ void on_rex_rauto_parallel_end() {
     ompt_trace_record_t *end_record = add_trace_record(thread_id, ompt_callback_parallel_end, frame, codeptr_ra);
     /* find the trace record for the begin_event of the parallel region */
     ompt_trace_record_t *begin_record = get_last_lexgion_record(emap);
-    if (begin_record->team_size != begin_record->user_team_size) {
-    //    omp_set_num_threads(begin_record->user_team_size); /* restore back to the original team size users want */
-    }
     /* pair the begin and end event together so we create a double-link between each other */
     link_records(begin_record, end_record);
 
