@@ -1108,9 +1108,10 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
     ANNOTATE_BARRIER_BEGIN(&team->t.t_bar);
 #if OMPT_SUPPORT
     if (ompt_enabled) {
+#if OMPT_OPTIONAL
         my_task_data = OMPT_CUR_TASK_DATA(this_thr);
         my_parallel_data = OMPT_CUR_TEAM_DATA(this_thr);
-        return_address = OMPT_LOAD_RETURN_ADDRESS(this_thr);
+        return_address = OMPT_LOAD_RETURN_ADDRESS(gtid);
         if (ompt_callbacks.ompt_callback(ompt_callback_sync_region)) {
             ompt_callbacks.ompt_callback(ompt_callback_sync_region)(
                 ompt_sync_region_barrier,
@@ -1119,7 +1120,6 @@ __kmp_barrier(enum barrier_type bt, int gtid, int is_split, size_t reduce_size,
                 my_task_data,
                 return_address);
         }
-#if OMPT_OPTIONAL
         if (ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait)) {
             ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait)(
                 ompt_sync_region_barrier,
@@ -1781,8 +1781,6 @@ __kmp_fork_barrier(int gtid, int tid)
                     0,
                     ds_tid);
             }
-            // not necessary for master, but avoid the branch here
-            pId->ptr=NULL;
             // return to idle state
             this_thr->th.ompt_thread_info.state = ompt_state_overhead;
         }

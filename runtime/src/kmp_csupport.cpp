@@ -320,6 +320,7 @@ __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...)
          ompt_task_info.frame);
        }
        ompt_frame->reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1);
+       OMPT_STORE_KMP_RETURN_ADDRESS(gtid);
     }
 #endif
 
@@ -343,6 +344,12 @@ __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...)
             );
 #if INCLUDE_SSC_MARKS
     SSC_MARK_JOINING();
+#endif
+
+#if OMPT_SUPPORT
+    if (ompt_enabled) {
+        OMPT_STORE_KMP_RETURN_ADDRESS(gtid);
+    }
 #endif
     __kmp_join_call( loc, gtid
 #if OMPT_SUPPORT
@@ -406,6 +413,7 @@ __kmpc_fork_teams(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...)
         parent_team->t.t_implicit_task_taskdata[tid].
            ompt_task_info.frame.reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1);
     }
+    OMPT_STORE_KMP_RETURN_ADDRESS(gtid);
 #endif
 
     // check if __kmpc_push_num_teams called, set default number of teams otherwise
@@ -473,6 +481,7 @@ __kmpc_serialized_parallel(ident_t *loc, kmp_int32 global_tid)
     // The implementation is now in kmp_runtime.cpp so that it can share static
     // functions with kmp_fork_call since the tasks to be done are similar in
     // each case.
+    OMPT_STORE_KMP_RETURN_ADDRESS(global_tid);
     __kmp_serialized_parallel(loc, global_tid);
 }
 
@@ -521,6 +530,7 @@ __kmpc_end_serialized_parallel(ident_t *loc, kmp_int32 global_tid)
     KMP_DEBUG_ASSERT( serial_team -> t.t_threads[0] == this_thr );
 
 #if OMPT_SUPPORT
+    OMPT_STORE_KMP_RETURN_ADDRESS(global_tid);
     if (ompt_enabled && this_thr->th.ompt_thread_info.state != ompt_state_overhead) {
         this_thr->th.th_current_task->ompt_task_info.frame.exit_runtime_frame = NULL;
         if (ompt_callbacks.ompt_callback(ompt_callback_implicit_task)) {
@@ -540,8 +550,8 @@ __kmpc_end_serialized_parallel(ident_t *loc, kmp_int32 global_tid)
             ompt_callbacks.ompt_callback(ompt_callback_parallel_end)(
                 &(serial_team->t.ompt_team_info.parallel_data),
                 parent_task_data,
-                ompt_invoker_runtime,
-                OMPT_GET_RETURN_ADDRESS(0));
+                ompt_invoker_program,
+                OMPT_LOAD_RETURN_ADDRESS(global_tid));
         }
         __ompt_lw_taskteam_unlink(this_thr);
         this_thr->th.ompt_thread_info.state = ompt_state_overhead;
@@ -684,10 +694,12 @@ __kmpc_flush(ident_t *loc)
     #endif
 
     #if OMPT_SUPPORT && OMPT_OPTIONAL
+    kmp_int32 global_tid = __kmp_entry_gtid();
+    OMPT_STORE_KMP_RETURN_ADDRESS(global_tid);
 	if (ompt_enabled && ompt_callbacks.ompt_callback(ompt_callback_flush)) { 
 	        ompt_callbacks.ompt_callback(ompt_callback_flush)(
 	            __ompt_get_thread_data_internal(), 
-		    OMPT_GET_RETURN_ADDRESS(0));
+		    OMPT_LOAD_RETURN_ADDRESS(global_tid));
 	}
     #endif
 
@@ -770,6 +782,7 @@ __kmpc_master(ident_t *loc, kmp_int32 global_tid)
     }
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL
+    OMPT_STORE_KMP_RETURN_ADDRESS(global_tid);
     if (status) {
         if (ompt_enabled &&
             ompt_callbacks.ompt_callback(ompt_callback_master)) {
@@ -781,7 +794,7 @@ __kmpc_master(ident_t *loc, kmp_int32 global_tid)
                 ompt_scope_begin,
                 &(team->t.ompt_team_info.parallel_data),
                 &(team->t.t_implicit_task_taskdata[tid].ompt_task_info.task_data),
-                OMPT_GET_RETURN_ADDRESS(0));
+                OMPT_LOAD_RETURN_ADDRESS(global_tid));
         }
     }
 #endif
@@ -822,6 +835,7 @@ __kmpc_end_master(ident_t *loc, kmp_int32 global_tid)
 #if OMPT_SUPPORT && OMPT_OPTIONAL
     kmp_info_t  *this_thr        = __kmp_threads[ global_tid ];
     kmp_team_t  *team            = this_thr -> th.th_team;
+    OMPT_STORE_KMP_RETURN_ADDRESS(global_tid);
     if (ompt_enabled &&
         ompt_callbacks.ompt_callback(ompt_callback_master)) {
         int  tid = __kmp_tid_from_gtid( global_tid );
@@ -829,7 +843,7 @@ __kmpc_end_master(ident_t *loc, kmp_int32 global_tid)
             ompt_scope_end,
             &(team->t.ompt_team_info.parallel_data),
             &(team->t.t_implicit_task_taskdata[tid].ompt_task_info.task_data),
-            OMPT_GET_RETURN_ADDRESS(0));
+            OMPT_LOAD_RETURN_ADDRESS(global_tid));
     }
 #endif
 
