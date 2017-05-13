@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 #include "omptool.h"
 #include "rex.h"
 #include <sys/timeb.h>
@@ -180,12 +181,12 @@ static void print_lexgion(thread_event_map_t * emap, ompt_lexgion_t * lgp) {
     ompt_measure_print(&lgp->accu);
 #if defined(OMPT_TRACING_SUPPORT) && defined(OMPT_MEASUREMENT_SUPPORT)
     printf("---------------------------------- Execution Records ------------------------------------------------\n");
-    printf("#\t\tRecord_id(team size) | ");
+    printf("#Record_id(team size)| ");
     ompt_measure_print_header(&lgp->accu);
     ompt_trace_record_t * record = lgp->most_recent;
     int counter = 1;
     while (record != NULL) {
-        printf("#%d: %d(%d)\t\t | ", counter, record->record_id, record->team_size);
+        printf("#%d: %d(%d)\t| ", counter, record->record_id, record->team_size);
         ompt_measure_print(&record->measurement);
         record = record->next;
         counter++;
@@ -216,6 +217,10 @@ void list_past_lexgions(thread_event_map_t * emap) {
     }
 }
 
+void PAPI_overflow_handler(int EventSet, void *address, long_long overflow_vector, void *context) {
+    printf("Overflow at %p! bit=0x%llx \en", address, overflow_vector);
+}
+
 void ompt_measure_global_init() {
 #ifdef PE_MEASUREMENT_SUPPORT
     init_pe_units();
@@ -223,7 +228,21 @@ void ompt_measure_global_init() {
 #ifdef PAPI_MEASUREMENT_SUPPORT
     /*papi event initilization*/
     PAPI_library_init(PAPI_VER_CURRENT);
-    PAPI_thread_init(rex_get_global_thread_num);
+    //PAPI_thread_init(rex_get_global_thread_num);
+    PAPI_thread_init(pthread_self);
+    int total = PAPI_num_counters();
+    //printf("Total %d PAPI counters\n", total);
+    PAPI_start_counters(PAPI_Events, NUM_PAPI_EVENTS);
+
+    /*Call PAPI_overflow for an event set containing the PAPI_TOT_INS event
+     * setting the threshold to 100000. Use the handler defined above.
+     */
+    int eventSet = PAPI_NULL;
+    PAPI_create_eventset(&eventSet);
+    int num = PAPI_add_events(eventSet, PAPI_Events, NUM_PAPI_EVENTS);
+    printf("%d events added\n", num);
+    int rtval = PAPI_overflow(eventSet, PAPI_TOT_INS, 1000, 0, PAPI_overflow_handler);
+    if (rtval != PAPI_OK) printf("PAPI_overflow failed: %d\n", rtval);
 #endif
 }
 
@@ -231,18 +250,22 @@ void ompt_measure_global_init() {
  * TODO
  */
 void ompt_measure_global_fini() {
-
-
+#ifdef PAPI_MEASUREMENT_SUPPORT
+#endif
 }
 
 void ompt_measure_init(ompt_measurement_t * me) {
-    me->time_stamp = 0;
+    memset(me, 0, sizeof(ompt_measurement_t));
 #ifdef PAPI_MEASUREMENT_SUPPORT
     /*papi event initilization*/
     me->num_papi_events = NUM_PAPI_EVENTS;
+/*
+    me->eventSet = PAPI_NULL;
     PAPI_create_eventset(&me->eventSet);
-    PAPI_add_events(me->eventSet, PAPI_Events, me->num_papi_events);
-    PAPI_start(me->eventSet);
+    int num = PAPI_add_events(me->eventSet, PAPI_Events, me->num_papi_events);
+    printf("%d events added\n", num);
+//    PAPI_start(me->eventSet);
+*/
 #endif
 }
 
@@ -254,7 +277,7 @@ void ompt_measure_fini(ompt_measurement_t * me) {
 
 void ompt_measure_reset(ompt_measurement_t * me) {
 #ifdef PAPI_MEASUREMENT_SUPPORT
-    PAPI_reset(me->eventSet);
+//    PAPI_reset(me->eventSet);
 #endif
 }
 /**
@@ -266,7 +289,8 @@ void ompt_measure(ompt_measurement_t * me) {
     pe_measure(me->pe_package, me->pe_pp0, me->pe_pp1, me->pe_dram);
 #endif
 #ifdef PAPI_MEASUREMENT_SUPPORT
-    PAPI_read(me->eventSet, me->papi_counter);
+    PAPI_read_counters(me->papi_counter, NUM_PAPI_EVENTS);
+   // PAPI_read(me->eventSet, me->papi_counter);
 #endif
 }
 
@@ -288,7 +312,8 @@ void ompt_measure_consume(ompt_measurement_t * me) {
 #endif
 #ifdef PAPI_MEASUREMENT_SUPPORT
     long long papi_counter[me->num_papi_events];
-    PAPI_read(me->eventSet, papi_counter);
+    //PAPI_read(me->eventSet, papi_counter);
+    PAPI_read_counters(papi_counter, NUM_PAPI_EVENTS);
     int i;
     for (i=0; i<me->num_papi_events; i++)
         me->papi_counter[i] = papi_counter[i] - me->papi_counter[i];
@@ -342,16 +367,17 @@ void ompt_measure_accu(ompt_measurement_t * accu, ompt_measurement_t * me) {
  * @param me
  */
 void ompt_measure_print(ompt_measurement_t * me) {
-    printf("%.2f\t\t", me->time_stamp);
+    printf("%.2f", me->time_stamp);
 #ifdef PE_MEASUREMENT_SUPPORT
     double package_energy = me->pe_package[0];
     double pp0_energy = me->pe_pp0[0];
     double pp1_energy = me->pe_pp1[0];
     double dram_energy = me->pe_dram[0];
     double total_energy = package_energy + dram_energy;
-    printf("%.6f\t\t%.6f\t\t%.6f\t\t%.6f\t\t\t%.6f)", total_energy, package_energy, pp1_energy, pp0_energy, dram_energy);
+    printf("\t\t%.2f\t\t%.2f\t\t%.2f\t\t%.2f\t\t\t%.2f", total_energy, package_energy, pp1_energy, pp0_energy, dram_energy);
 #endif
 #ifdef PAPI_MEASUREMENT_SUPPORT
+    printf("\t\t");
     int i;
     for (i=0; i<me->num_papi_events; i++) {
         printf("%lld\t\t", me->papi_counter[i]);
@@ -361,19 +387,22 @@ void ompt_measure_print(ompt_measurement_t * me) {
 }
 
 void ompt_measure_print_header(ompt_measurement_t * me) {
-    printf("Time (ms)\t\t");
+    printf("Time(ms)");
 #ifdef PE_MEASUREMENT_SUPPORT
-    printf("Energy (j) total (PKG+DRAM): package\tPP0\t\t\tPP1\t\t\tDRAM)");
+    printf("\tEnergy (j) total (PKG+DRAM): package\tPP0\t\t\tPP1\t\t\tDRAM");
 #endif
 #ifdef PAPI_MEASUREMENT_SUPPORT
     int i;
     int Events[NUM_PAPI_EVENTS];
-    int number;
-    PAPI_list_events(me->eventSet, Events, &number);
+    int number = NUM_PAPI_EVENTS;
+//    PAPI_list_events(me->eventSet, Events, &number);
+//    printf("%d PAPI events\n", number);
     char EventName[PAPI_MAX_STR_LEN];
+    printf("\t\t");
     for (i=0; i<number; i++) {
-        PAPI_event_code_to_name(Events[i], EventName);
-        printf("%s\t\t", EventName);
+        //PAPI_event_code_to_name(Events[i], EventName);
+        PAPI_event_code_to_name(PAPI_Events[i], EventName);
+        printf("%s\t", EventName);
     }
 #endif
     printf("\n");

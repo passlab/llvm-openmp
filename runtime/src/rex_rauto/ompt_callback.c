@@ -109,7 +109,6 @@ static void on_ompt_callback_idle(
         }
     }
 }
-#define REX_RAUTO_TUNING 1
 
 void on_rex_rauto_parallel_begin(uint32_t requested_team_size) {
     const void *codeptr_ra  =  OMPT_GET_RETURN_ADDRESS(2); /* address of the function who calls __kmpc_fork_call */
@@ -123,7 +122,7 @@ void on_rex_rauto_parallel_begin(uint32_t requested_team_size) {
 #ifdef OMPT_MEASUREMENT_SUPPORT
     if (lgp->total_record == 1) { /* the first record */
         ompt_measure_init(&lgp->current);
-        memset(&lgp->accu, 0, sizeof(ompt_measurement_t));
+        ompt_measure_init(&lgp->accu);
     } else {
 #ifdef REX_RAUTO_TUNING
         if (lgp->current.requested_team_size == requested_team_size) { /* if we are executing the parallel lexgion of the same problem size */
@@ -191,9 +190,6 @@ void on_rex_rauto_parallel_end() {
 #ifdef OMPT_MEASUREMENT_SUPPORT
     ompt_measure_consume(&lgp->current);
     ompt_measure_accu(&lgp->accu, &lgp->current);
-    if (lgp->current.team_size != lgp->current.requested_team_size) {
-        omp_set_num_threads(lgp->current.requested_team_size);
-    }
 #endif
 
     const void *codeptr_ra  =  OMPT_GET_RETURN_ADDRESS(2); /* address of the function who calls __kmpc_fork_call */
@@ -210,9 +206,9 @@ void on_rex_rauto_parallel_end() {
     begin_record->measurement = lgp->current;
 #endif
 #ifdef OMPT_ONLINE_TRACING_PRINT
-    printf("Thread: %d, parallel: %X, instance: %d \t| ", thread_id, codeptr_ra, begin_record->record_id);
+    printf("Thread: %d, parallel: %X, record: %d\t|", thread_id, codeptr_ra, begin_record->record_id);
     ompt_measure_print_header(&lgp->current);
-    printf("                                       \t\t| ");
+    printf("                                    \t|");
     ompt_measure_print(&lgp->current);
 #endif
 #endif
@@ -239,7 +235,6 @@ void on_rex_rauto_thread_begin(int thread_id) {
 #ifdef OMPT_TRACING_SUPPORT
     emap->records = (ompt_trace_record_t *) malloc(sizeof(ompt_trace_record_t) * MAX_NUM_RECORDS);
 #endif
-#if 0
     const void *codeptr_ra  =  &on_rex_rauto_thread_begin; /* address of the function who calls __kmpc_fork_call */
     const void *frame  =  OMPT_GET_FRAME_ADDRESS(0);
     ompt_lexgion_t * lgp = ompt_lexgion_begin(emap, (void*)on_rex_rauto_thread_begin);
@@ -250,14 +245,12 @@ void on_rex_rauto_thread_begin(int thread_id) {
     add_record_lexgion(lgp, record);
 #endif
     //printf("Thread: %d thread begin\n", thread_id);
-#endif
     ompt_measure_init(&emap->thread_total);
     ompt_measure(&emap->thread_total);
 }
 
 void on_rex_rauto_thread_end(int thread_id ) {
     thread_event_map_t *emap = get_event_map(thread_id);
-#if 0
     const void *codeptr_ra  =  &on_rex_rauto_thread_end; /* address of the function who calls __kmpc_fork_call */
     const void *frame  =  OMPT_GET_FRAME_ADDRESS(0);
     //printf("Thread: %d thread end\n", thread_id);
@@ -270,7 +263,6 @@ void on_rex_rauto_thread_end(int thread_id ) {
 #endif
 //    fini_thread_event_map(thread_id);
     pop_lexgion(emap);
-#endif
     ompt_measure_consume(&emap->thread_total);
 }
 

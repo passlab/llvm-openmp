@@ -6433,6 +6433,10 @@ __kmp_do_serial_initialize( void )
     ompt_pre_init();
 #endif
 
+#ifdef REX_RAUTO_SUPPORT
+    rex_rauto_init();
+#endif
+
     __kmp_validate_locks();
 
     /* Initialize internal memory allocator */
@@ -6684,10 +6688,6 @@ __kmp_do_serial_initialize( void )
 
 #ifdef REX_SUPPORT
     rex_init_devices();
-#endif
-
-#ifdef REX_RAUTO_SUPPORT
-    rex_rauto_init();
 #endif
 
     KA_TRACE( 10, ("__kmp_do_serial_initialize: exit\n" ) );
