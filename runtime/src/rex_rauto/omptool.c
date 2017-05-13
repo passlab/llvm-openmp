@@ -34,7 +34,7 @@ int HWTHREADS_IDLE_FLAG[72] = {1}; // 0 is in the beginning of idle state; 1 mea
 #endif
 
 #ifdef PAPI_MEASUREMENT_SUPPORT
-unsigned int PAPI_Events[NUM_PAPI_EVENTS]={PAPI_TOT_INS, PAPI_TOT_CYC, PAPI_L1_DCM};
+int PAPI_Events[NUM_PAPI_EVENTS]={PAPI_TOT_INS, PAPI_TOT_CYC, PAPI_L1_DCM};
 #endif
 
 
@@ -69,7 +69,7 @@ ompt_trace_record_t *add_trace_record(int thread_id, int event_id, ompt_frame_t 
     ompt_trace_record_t *rd = get_trace_record_from_emap(emap, counter);
 
     rd->event_id = event_id;
-    rd->uid = ((uint64_t)thread_id) << 4  + emap->counter;
+    rd->uid = (((uint64_t)thread_id) << 4)  + emap->counter;
     //rd->frame = frame;
     rd->codeptr_ra = codeptr_ra;
     rd->match_record = -1;
@@ -155,7 +155,7 @@ ompt_lexgion_t * ompt_lexgion_begin(thread_event_map_t * emap, const void * code
     i = emap->lexgion_last_index;
     i++;
     if (i == MAX_SRC_PARALLELS) {
-        sprintf(stderr, "Max number of parallel regions (%d) allowed in the source code reached\n", MAX_SRC_PARALLELS);
+        fprintf(stderr, "Max number of parallel regions (%d) allowed in the source code reached\n", MAX_SRC_PARALLELS);
     } else {
         emap->lexgion_last_index = i;
         emap->lexgion_recent = i;
