@@ -386,6 +386,11 @@ __kmp_GOMP_parallel_microtask_wrapper(int *gtid, int *npr,
     //
     // Intialize the loop worksharing construct.
     //
+
+#if OMPT_SUPPORT
+    if(ompt_enabled)
+        OMPT_STORE_GOMP_RETURN_ADDRESS(*gtid);
+#endif
     KMP_DISPATCH_INIT(loc, *gtid, schedule, start, end, incr, chunk_size,
       schedule != kmp_sch_static);
 
@@ -479,52 +484,7 @@ __kmp_GOMP_fork_call(ident_t *loc, int gtid, void (*unwrapped_task)(void *), mic
 static void
 __kmp_GOMP_serialized_parallel(ident_t *loc, kmp_int32 gtid, void (*task)(void *))
 {
-#if OMPT_SUPPORT
-    ompt_parallel_data_t ompt_parallel_data;
-    ompt_task_info_t* ompt_task_info;
-    kmp_info_t *thr;
-    if (ompt_enabled) {
-        thr = __kmp_threads[gtid];
-        ompt_task_info = OMPT_CUR_TASK_INFO(thr);
-
-        // parallel region callback
-        if (ompt_callbacks.ompt_callback(ompt_callback_parallel_begin)) {
-            int team_size = 1;
-            ompt_callbacks.ompt_callback(ompt_callback_parallel_begin)(
-                &(ompt_task_info->task_data), &(ompt_task_info->frame), &ompt_parallel_data,
-                team_size, 
-                //team_size,
-                OMPT_INVOKER(fork_context_gnu),
-                OMPT_GET_RETURN_ADDRESS(1));
-        }
-    }
-#endif
-
     __kmp_serialized_parallel(loc, gtid);
-
-#if OMPT_SUPPORT
-    if (ompt_enabled) {
-        int ompt_team_size;
-
-        // set up lightweight task
-        ompt_lw_taskteam_t lwt;
-        __ompt_lw_taskteam_init(&lwt, thr, gtid, (void *) task, &ompt_parallel_data);
-        lwt.ompt_task_info.task_data.value = __ompt_task_id_new(gtid);
-        lwt.ompt_task_info.frame.exit_runtime_frame = 0;
-        __ompt_lw_taskteam_link(&lwt, thr, 1);
-
-        // implicit task callback
-        if (ompt_callbacks.ompt_callback(ompt_callback_implicit_task)) {
-            ompt_callbacks.ompt_callback(ompt_callback_implicit_task)(
-                ompt_scope_begin,
-                OMPT_CUR_TEAM_DATA(thr),
-                &(ompt_task_info->task_data),
-                1,
-                __kmp_tid_from_gtid(gtid));
-        }
-        thr->th.ompt_thread_info.state = ompt_state_work_parallel;
-    }
-#endif
 }
 
 
@@ -540,6 +500,7 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_START)(void (*task)(void *), void *data, unsi
         __ompt_get_task_info_internal(0, NULL, NULL, &parent_frame, NULL, NULL);
         parent_frame->reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1);
     }
+    OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
 #endif
 
     MKLOC(loc, "GOMP_parallel_start");
@@ -618,6 +579,7 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_END)(void)
           // these don't see the implicit task on the stack
           OMPT_CUR_TASK_INFO(thr)->frame.exit_runtime_frame = NULL;
         }
+        OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
 #endif
 
         __kmp_join_call(&loc, gtid
@@ -1005,7 +967,8 @@ LOOP_NEXT_ULL(xexpand(KMP_API_NAME_GOMP_LOOP_ULL_ORDERED_RUNTIME_NEXT), \
     if (ompt_enabled) { \
         __ompt_get_task_info_internal(0, NULL, NULL, &parent_frame, NULL, NULL); \
         parent_frame->reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1); \
-    }
+    } \
+    OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
 
 
 #define OMPT_LOOP_POST() \
@@ -1245,6 +1208,7 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_SECTIONS_START)(void (*task) (void *), void *
         __ompt_get_task_info_internal(0, NULL, NULL, &parent_frame, NULL, NULL); \
         parent_frame->reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1);
     }
+    OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
 #endif
 
     MKLOC(loc, "GOMP_parallel_sections_start");
@@ -1329,6 +1293,7 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL)(void (*task)(void *), void *data, unsigned n
         parent_task_info = __ompt_get_task_info_object(0);
         parent_task_info->frame.reenter_runtime_frame = OMPT_GET_FRAME_ADDRESS(1);
     }
+    OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
 #endif
     if (__kmpc_ok_to_fork(&loc) && (num_threads != 1)) {
         if (num_threads != 0) {
@@ -1367,6 +1332,10 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_SECTIONS)(void (*task) (void *), void *data,
     MKLOC(loc, "GOMP_parallel_sections");
     KA_TRACE(20, ("GOMP_parallel_sections: T#%d\n", gtid));
 
+#if OMPT_SUPPORT
+    OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);
+#endif
+
     if (__kmpc_ok_to_fork(&loc) && (num_threads != 1)) {
         if (num_threads != 0) {
             __kmp_push_num_threads(&loc, gtid, num_threads);
@@ -1389,6 +1358,12 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_SECTIONS)(void (*task) (void *), void *data,
     xexpand(KMP_API_NAME_GOMP_PARALLEL_END)();
     KA_TRACE(20, ("GOMP_parallel_sections exit: T#%d\n", gtid));
 }
+
+#if OMPT_SUPPORT
+#define INCLUDE_IF_OMPT_SUPPORT(code) code
+#else
+#define INCLUDE_IF_OMPT_SUPPORT(code)
+#endif
 
 #define PARALLEL_LOOP(func, schedule, ompt_pre, ompt_post) \
     void func (void (*task) (void *), void *data, unsigned num_threads,      \
@@ -1416,12 +1391,13 @@ xexpand(KMP_API_NAME_GOMP_PARALLEL_SECTIONS)(void (*task) (void *), void *data,
             __kmp_GOMP_serialized_parallel(&loc, gtid, task);                \
         }                                                                    \
                                                                              \
+        INCLUDE_IF_OMPT_SUPPORT(if(ompt_enabled) OMPT_STORE_GOMP_RETURN_ADDRESS(gtid);)        \
         KMP_DISPATCH_INIT(&loc, gtid, (schedule), lb,                        \
           (str > 0) ? (ub - 1) : (ub + 1), str, chunk_sz,                    \
           (schedule) != kmp_sch_static);                                     \
         task(data);                                                          \
         xexpand(KMP_API_NAME_GOMP_PARALLEL_END)();                           \
-        ompt_post();                                                          \
+        ompt_post();                                                         \
                                                                              \
         KA_TRACE(20, ( #func " exit: T#%d\n", gtid));                        \
     }
