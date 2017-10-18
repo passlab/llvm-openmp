@@ -1,10 +1,12 @@
 
-# REX extensions to LLVM OpenMP runtime, which is also compatible with Intel commercial compiler 
+# REX Extensions to LLVM OpenMP Runtime
+This respository containts the REX extensions to OpenMP, including rex_kmp runtime API, REX HPT, HOMP, etc. 
+Since LLVM OpenMP runtime is also compatible with Intel commercial compiler, so the runtime also works with icc. 
 
-This respository containts several branches for development purpose:
-### master is the main branch that consoliates the development from other branch when they are stable.
-### rex_kmpapi is the branch for creating rex_* API for the kmp functionality so users can directly write their OpenMP style code using runtime API, i.e. without the need of compiler.
-### rex branch is for REX extensions including HPT support, and HOMP related extensions.
+    1. **master** is the main branch that consoliates the development from other branch when they are stable.
+    1. **rex_kmpapi** is the branch for creating rex_* API for the kmp functionality so users can directly 
+       write their OpenMP style code using runtime API, i.e. without the need of compiler.
+    1. **rex branch** is for REX extensions including HPT support, and HOMP related extensions.
 
 The [runtime/CMakeLists.txt] and [runtime/src/CMakeLists.txt] define and use REX-related cmake variables to configure which files will
 be built into final library and other things. 
