@@ -6666,7 +6666,6 @@ static void __kmp_do_serial_initialize(void) {
 
   KMP_MB();
 
-<<<<<<< HEAD
 #ifdef REX_SUPPORT
   rex_init_devices();
 #endif

@@ -32,12 +32,22 @@ set(LIBOMP_VERSION_MAJOR 5)
 set(LIBOMP_VERSION_MINOR 0)
 
 # Set rex version
+# for full REX support
 if(${LIBOMP_REX_SUPPORT})
   set(REX_VERSION_MAJOR 0)
   set(REX_VERSION_MINOR 1)
   set(LIBOMP_REX_SUPPORT TRUE)
 else()
   set(LIBOMP_REX_SUPPORT FALSE)
+endif()
+
+# for REX KMP API support
+if(${LIBOMP_REX_KMPAPI_SUPPORT})
+  set(REX_VERSION_MAJOR 0)
+  set(REX_VERSION_MINOR 1)
+  set(LIBOMP_REX_KMPAPI_SUPPORT TRUE)
+else()
+  set(LIBOMP_REX_KMPAPI_SUPPORT FALSE)
 endif()
 
 # These include files are in the cmake/ subdirectory
@@ -413,7 +423,8 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
   libomp_say("REX runtime support  -- ${LIBOMP_REX_SUPPORT}")
-  if(${LIBOMP_REX_SUPPORT})
+  libomp_say("REX KMP API support  -- ${LIBOMP_REX_KMPAPI_SUPPORT}")
+  if(${LIBOMP_REX_SUPPORT} OR ${LIBOMP_REX_KMPAPI_SUPPORT})
     libomp_say("REX Version          -- ${REX_VERSION_MAJOR}.${REX_VERSION_MINOR}")
   endif()
 endif()
