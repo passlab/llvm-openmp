@@ -8,22 +8,21 @@ Since LLVM OpenMP runtime is also compatible with Intel commercial compiler, so 
   write their OpenMP style code using runtime API, i.e. without the need of compiler.
 1. **rex branch** is for REX extensions including HPT support, and HOMP related extensions.
 
-The [runtime/CMakeLists.txt] and [runtime/src/CMakeLists.txt] define and use REX-related cmake variables to configure which files will
-be built into final library and other things. 
-
-### LIBOMP_REX_KMPAPI_SUPPORT: enable features and development in rex_kmpapi branch 
-### LIBOMP_REX_SUPPORT: enable features and development in rex branch
-### LIBOMP_OMPT_SUPPORT: enable OMPT support if it is available (currently it is from https://github.com/OpenMPToolsInterface/LLVM-openmp, towards_tr4 branch)
-
+The [runtime/CMakeLists.txt](runtime/CMakeLists.txt) and [runtime/src/CMakeLists.txt](runtime/src/CMakeLists.txt) define and use REX-related cmake variables to configure which files will be built into final library and other things. 
+1. **LIBOMP_REX_KMPAPI_SUPPORT**: enable features and development in rex_kmpapi branch 
+1. **LIBOMP_REX_SUPPORT**: enable features and development in rex branch
+1. **LIBOMP_OMPT_SUPPORT**: enable OMPT support if it is available (currently it is from https://github.com/OpenMPToolsInterface/LLVM-openmp, towards_tr4 branch)
 
 ## Build the Library and Installation
   1. clone the repo and checkout the branch you need (only need to do once, mostly)
+  
            git clone https://github.com/passlab/llvm-openmp 
            cd llvm-openmp
            git remote update
            git checkout -b rex_kmpapi
           
   1. cmake to create the makefile with the LIBOMP_* setting you want
+  
            mkdir BUILD
            cd BUILD
            cmake -G "Unix Makefiles" -DLIBOMP_OMPT_SUPPORT=on -DLIBOMP_OMPT_TRACE=on -DCMAKE_INSTALL_PREFIX=<install_path> ..
