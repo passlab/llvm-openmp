@@ -1,6 +1,6 @@
 
 # REX Extensions to LLVM OpenMP Runtime
-This respository containts the REX extensions to OpenMP, including rex_kmp runtime API, REX HPT, HOMP, etc. 
+This respository contains REX extensions to OpenMP, including rex_kmp runtime API, REX HPT, HOMP, etc. 
 Since LLVM OpenMP runtime is also compatible with Intel commercial compiler, so the runtime also works with icc. 
 
 1. **master** is the main branch that consoliates the development from other branch when they are stable.
