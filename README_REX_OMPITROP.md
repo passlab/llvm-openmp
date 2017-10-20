@@ -11,5 +11,13 @@ was discussed in IWOMP 2016. `omp_set_wait_policy` was introduced to address pas
 | ACTIVE: SPIN_BUSY    | Busy wait in user level                        | `while (!finished());`               |
 | ACTIVE: SPIN_PAUSE   | Busy wait while pausing CPU                    | `while (!finished()) cpu pause();`   |
 | PASSIVE: SPIN_YIELD  | Busy wait with yield                           | `while (!finished()) sched yield();` |
-| PASSIVE: SUSPEND     | Thread sleepsa and need others to wake it up.  | `mutex wait(); mutex wake();`        |
+| PASSIVE: SUSPEND     | Thread sleeps and need others to wake it up.   | `mutex wait(); mutex wake();`        |
 | TERMINATE            | Thread terminates                              | `pthread_exit();`                    |
+
+The threading binding set of `omp_set_wait_policy(policy)` depends on where it being called, see below:
+| call site            | Binding thread set                             |
+| -------------------- |:----------------------------------------------:| 
+| sequential region    | The whole contention group                     |
+| parallel region      | The calling thread                             | 
+
+
