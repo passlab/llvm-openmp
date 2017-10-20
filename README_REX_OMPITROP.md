@@ -15,6 +15,7 @@ was discussed in IWOMP 2016. `omp_set_wait_policy` was introduced to address pas
 | TERMINATE            | Thread terminates                              | `pthread_exit();`                    |
 
 The threading binding set of `omp_set_wait_policy(policy)` depends on where it being called, see below:
+
 | call site            | Binding thread set                             |
 | -------------------- |:----------------------------------------------:| 
 | sequential region    | The whole contention group                     |
