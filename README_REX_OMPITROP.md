@@ -21,4 +21,8 @@ The threading binding set of `omp_set_wait_policy(policy)` depends on where it b
 | sequential region    | The whole contention group                     |
 | parallel region      | The calling thread                             | 
 
+The previous implementation onluy support the above two types binding thread set when setting wait policy for threads. It is often that thread-specific setting and setting according to the location provide better and finer grained control of the thread behavior. For example, we want to set wait policy for threads participating in barrier to be ACTIVE:SPIN_BUSY waiting while for threads after a join barrier to be PASSIVE:SPSPENDed. 
+IMPLICIT BARRIER: e.g. those in workshare, single
+JOIN BARRIER:
+IDLE
 
