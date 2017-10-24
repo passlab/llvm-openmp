@@ -10,7 +10,7 @@ Since LLVM OpenMP runtime is also compatible with Intel commercial compiler, so 
   and omp_task, etc. 
 1. **rex branch** is for REX extensions including HPT support, and HOMP related extensions.
 
-The [runtime/CMakeLists.txt](runtime/CMakeLists.txt) and [runtime/src/CMakeLists.txt](runtime/src/CMakeLists.txt) define and use REX-related cmake variables to configure which files will be built into final library and other things. 
+The [runtime/CMakeLists.txt](runtime/CMakeLists.txt) and [runtime/src/CMakeLists.txt](runtime/src/CMakeLists.txt) define and use REX-related cmake variables to configure which files will be built into final library and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/src/kmp_config.h.cmake) file). 
 1. **LIBOMP_REX_KMPAPI_SUPPORT**: enable features and development in rex_kmpapi branch 
 1. **LIBOMP_REX_OMPITROP_SUPPORT**: enable features and development in rex_ompitrop branch 
 1. **LIBOMP_REX_SUPPORT**: enable features and development in rex branch
