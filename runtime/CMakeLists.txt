@@ -50,6 +50,15 @@ else()
   set(LIBOMP_REX_KMPAPI_SUPPORT FALSE)
 endif()
 
+# for REX OpenMP Interoperability support
+if(${LIBOMP_REX_OMPITROP_SUPPORT})
+  set(REX_VERSION_MAJOR 0)
+  set(REX_VERSION_MINOR 1)
+  set(LIBOMP_REX_OMPITROP_SUPPORT TRUE)
+else()
+  set(LIBOMP_REX_OMPITROP_SUPPORT FALSE)
+endif()
+
 # These include files are in the cmake/ subdirectory
 include(LibompUtils)
 include(LibompGetArchitecture)
@@ -427,6 +436,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
   libomp_say("REX runtime support  -- ${LIBOMP_REX_SUPPORT}")
   libomp_say("REX KMP API support  -- ${LIBOMP_REX_KMPAPI_SUPPORT}")
+  libomp_say("REX OMPITROP support -- ${LIBOMP_REX_OMPITROP_SUPPORT}")
   if(${LIBOMP_REX_SUPPORT} OR ${LIBOMP_REX_KMPAPI_SUPPORT})
     libomp_say("REX Version          -- ${REX_VERSION_MAJOR}.${REX_VERSION_MINOR}")
   endif()

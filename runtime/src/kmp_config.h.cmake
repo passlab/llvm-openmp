@@ -76,6 +76,10 @@
 #if LIBOMP_REX_SUPPORT
 #define REX_SUPPORT
 #endif
+#cmakedefine01 LIBOMP_REX_OMPITROP_SUPPORT
+#if LIBOMP_REX_OMPITROP_SUPPORT
+#define REX_OMPITROP_SUPPORT
+#endif
 
 // Configured cache line based on architecture
 #if KMP_ARCH_PPC64
