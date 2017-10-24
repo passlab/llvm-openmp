@@ -6,10 +6,13 @@ Since LLVM OpenMP runtime is also compatible with Intel commercial compiler, so 
 1. **master** is the main branch that consoliates the development from other branch when they are stable.
 1. **rex_kmpapi** is the branch for creating rex_* API for the kmp functionality so users can directly 
   write their OpenMP style code using runtime API, i.e. without the need of compiler.
+1. **rex_ompitrop** is the branch for OpenMP interoperability support including omp_set_wait_policy, omp_thread_create/exit/join/attach, 
+  and omp_task, etc. 
 1. **rex branch** is for REX extensions including HPT support, and HOMP related extensions.
 
 The [runtime/CMakeLists.txt](runtime/CMakeLists.txt) and [runtime/src/CMakeLists.txt](runtime/src/CMakeLists.txt) define and use REX-related cmake variables to configure which files will be built into final library and other things. 
 1. **LIBOMP_REX_KMPAPI_SUPPORT**: enable features and development in rex_kmpapi branch 
+1. **LIBOMP_REX_OMPITROP_SUPPORT**: enable features and development in rex_ompitrop branch 
 1. **LIBOMP_REX_SUPPORT**: enable features and development in rex branch
 1. **LIBOMP_OMPT_SUPPORT**: enable OMPT support if it is available (currently it is from https://github.com/OpenMPToolsInterface/LLVM-openmp, towards_tr4 branch)
 
