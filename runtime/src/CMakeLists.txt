@@ -18,9 +18,6 @@ endif()
 if(${LIBOMP_REX_SUPPORT})
   configure_file(${LIBOMP_SRC_DIR}/rex.h rex.h @ONLY)
 endif()
-if(${LIBOMP_REX_KMPAPI_SUPPORT})
-  configure_file(${LIBOMP_SRC_DIR}/rex_kmp.h rex_kmp.h @ONLY)
-endif()
 
 # Generate message catalog files: kmp_i18n_id.inc and kmp_i18n_default.inc
 add_custom_command(
@@ -116,7 +113,6 @@ libomp_append(LIBOMP_CXXFILES kmp_ftn_extra.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_version.cpp)
 libomp_append(LIBOMP_CXXFILES ompt-general.cpp IF_TRUE LIBOMP_OMPT_SUPPORT)
 libomp_append(LIBOMP_CXXFILES tsan_annotations.cpp IF_TRUE LIBOMP_TSAN_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_kmp.cpp IF_TRUE LIBOMP_REX_KMPAPI_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_runtime.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_grid_topology.cpp IF_TRUE LIBOMP_REX_SUPPORT)
 libomp_append(LIBOMP_CXXFILES rex_devices.cpp IF_TRUE LIBOMP_REX_SUPPORT)

@@ -41,15 +41,6 @@ else()
   set(LIBOMP_REX_SUPPORT FALSE)
 endif()
 
-# for REX KMP API support
-if(${LIBOMP_REX_KMPAPI_SUPPORT})
-  set(REX_VERSION_MAJOR 0)
-  set(REX_VERSION_MINOR 1)
-  set(LIBOMP_REX_KMPAPI_SUPPORT TRUE)
-else()
-  set(LIBOMP_REX_KMPAPI_SUPPORT FALSE)
-endif()
-
 # for REX OpenMP Interoperability support
 if(${LIBOMP_REX_OMPITROP_SUPPORT})
   set(REX_VERSION_MAJOR 0)
