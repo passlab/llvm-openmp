@@ -15,6 +15,9 @@ configure_file(kmp_config.h.cmake kmp_config.h @ONLY)
 if(${LIBOMP_OMPT_SUPPORT})
   configure_file(${LIBOMP_INC_DIR}/ompt.h.var ompt.h @ONLY)
 endif()
+if(${LIBOMP_REX_KMPAPI_SUPPORT})
+  configure_file(${LIBOMP_SRC_DIR}/rex_kmp.h rex_kmp.h @ONLY)
+endif()
 
 # Generate message catalog files: kmp_i18n_id.inc and kmp_i18n_default.inc
 add_custom_command(
@@ -110,6 +113,7 @@ libomp_append(LIBOMP_CXXFILES kmp_ftn_extra.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_version.cpp)
 libomp_append(LIBOMP_CXXFILES ompt-general.cpp IF_TRUE LIBOMP_OMPT_SUPPORT)
 libomp_append(LIBOMP_CXXFILES tsan_annotations.cpp IF_TRUE LIBOMP_TSAN_SUPPORT)
+libomp_append(LIBOMP_CXXFILES rex_kmp.cpp IF_TRUE LIBOMP_REX_KMPAPI_SUPPORT)
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CFILES} ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
@@ -320,6 +324,9 @@ install(
 )
 if(${LIBOMP_OMPT_SUPPORT})
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ompt.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
+endif()
+if(${LIBOMP_REX_KMPAPI_SUPPORT})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rex_kmp.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
 endif()
 if(${LIBOMP_FORTRAN_MODULES})
   install(FILES

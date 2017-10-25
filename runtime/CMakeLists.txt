@@ -28,6 +28,13 @@ endif()
 set(LIBOMP_VERSION_MAJOR 5)
 set(LIBOMP_VERSION_MINOR 0)
 
+# for REX KMP API support
+if(${LIBOMP_REX_KMPAPI_SUPPORT})
+  set(LIBOMP_REX_KMPAPI_SUPPORT TRUE)
+else()
+  set(LIBOMP_REX_KMPAPI_SUPPORT FALSE)
+endif()
+
 # These include files are in the cmake/ subdirectory
 include(LibompUtils)
 include(LibompGetArchitecture)
@@ -403,6 +410,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
+  libomp_say("REX KMP API support  -- ${LIBOMP_REX_KMPAPI_SUPPORT}")
 endif()
 
 add_subdirectory(src)
