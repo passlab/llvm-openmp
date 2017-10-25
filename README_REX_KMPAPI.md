@@ -31,3 +31,8 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
   location is `<install_path>/lib/clang/5.0.0/include`, and the libomp.so is from `<install_path>/lib`. 
   Setup the library path for execution by letting LD_LIBRARY_PATH env include the lib path. 
   For development and compiling, you need to provide the header path and lib path to the -I and -L flags of the compiler.
+
+## Resources
+  1. [Reference manual for Intel OpenMP runtime library](https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf). From the same website for Intel OpenMP runtime library, [https://www.openmprtl.org](https://www.openmprtl.org), you can find more information. The PDF file on the web is not up to date
+  with the latest development, and you can build that PDF file or HTML from the source tree. More info can be found from [www](www) folder. 
+  1. A ROSE-based OpenMP 3.0 Research Compiler Supporting [Multiple Runtime Libraries (XOMP)](http://rosecompiler.org/ROSE_ResearchPapers/2010-06-AROSEBasedOpenMP3.0ResearchCompiler-IWOMP.pdf)
