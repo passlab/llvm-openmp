@@ -26,11 +26,17 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
       
            CC=/opt/gcc-5.3.0-install/bin/gcc CXX=/opt/gcc-5.3.0-install/bin/g++ cmake -DLIBOMP_REX_KMPAPI_SUPPORT=on -DCMAKE_INSTALL_PREFIX=<install_path> ..
            
+     Each time you change the source code, either rex_kmp.h or rex_kmp.cpp file, and you want to test, you will need to do `make; make install` command. 
+           
   1. location for header files (omp.h, rex_kmp.h, and ompt.h) and libomp.so library are `<install_path>/include` and
   `<install_path>/lib` if the runtime is installed standalone. If it is installed as part of clang/llvm, the header 
   location is `<install_path>/lib/clang/5.0.0/include`, and the libomp.so is from `<install_path>/lib`. 
   Setup the library path for execution by letting LD_LIBRARY_PATH env include the lib path. 
   For development and compiling, you need to provide the header path and lib path to the -I and -L flags of the compiler.
+  
+  ## Experiment and testing 
+   1. The first test program, [runtime/test/rex_kmpapi/parallel.c](runtime/test/rex_kmpapi/parallel.c) and a simple Makefile located in the same folder can be used for testing the implementation of parallel/single/master/barrier and others. 
+   1. Please write other test files for other OpenMP functions
 
 ## Resources
   1. [Reference manual for Intel OpenMP runtime library](https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf). From the same website for Intel OpenMP runtime library, [https://www.openmprtl.org](https://www.openmprtl.org), you can find more information. The PDF file on the web is not up to date
