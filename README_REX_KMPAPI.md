@@ -34,6 +34,10 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
   Setup the library path for execution by letting LD_LIBRARY_PATH env include the lib path. 
   For development and compiling, you need to provide the header path and lib path to the -I and -L flags of the compiler.
   
+  ## Implementation
+  1. All the implementation should be done in [runtime/src/rex_kmp.h] and [runtime/src/rex_kmp.cpp] files. You will need mostly
+  refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
+    
   ## Experiment and testing 
    1. The first test program, [runtime/test/rex_kmpapi/parallel.c](runtime/test/rex_kmpapi/parallel.c) and a simple Makefile located in the same folder can be used for testing the implementation of parallel/single/master/barrier and others. 
    1. Please write other test files for other OpenMP functions
