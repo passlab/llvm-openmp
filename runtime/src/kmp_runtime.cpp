@@ -3149,6 +3149,10 @@ static void __kmp_initialize_root(kmp_root_t *root) {
   root->r.r_nested = __kmp_dflt_nested;
   root->r.r_cg_nthreads = 1;
 
+#ifdef REX_OMPITROP_SUPPORT
+  root->r.r_wait_policy_set = 0;
+#endif
+
   /* setup the root team for this task */
   /* allocate the root team structure */
   KF_TRACE(10, ("__kmp_initialize_root: before root_team\n"));
@@ -4039,6 +4043,11 @@ static void __kmp_initialize_info(kmp_info_t *this_thr, kmp_team_t *team,
   KMP_DEBUG_ASSERT(team->t.t_dispatch);
   KMP_DEBUG_ASSERT(master);
   KMP_DEBUG_ASSERT(master->th.th_root);
+    
+#ifdef REX_OMPITROP_SUPPORT
+  this_thr->th.itrop_thr = NULL;
+  this_thr->th.th_wait_policy_set = 0;
+#endif
 
   KMP_MB();
 
@@ -5593,6 +5602,9 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
 
     /* No tid yet since not part of a team */
     __kmp_fork_barrier(gtid, KMP_GTID_DNE);
+#ifdef REX_OMPITROP_SUPPORT
+    omp_thread_t * th = (omp_thread_t*)this_thr->th.itrop_thr;
+#endif
 
 #if OMPT_SUPPORT
     if (ompt_enabled) {
@@ -5652,6 +5664,10 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
                       (*pteam)->t.t_pkfn));
       }
       /* join barrier after parallel region */
+#ifdef REX_OMPITROP_SUPPORT
+      /* omp_thread_create hack so we do not need a join barrier if th != NULL */
+      if (th == NULL) 
+#endif
       __kmp_join_barrier(gtid);
 #if OMPT_SUPPORT && OMPT_TRACE
       if (ompt_enabled) {
@@ -7569,6 +7585,95 @@ void __kmp_aux_set_defaults(char const *str, int len) {
     __kmp_env_print();
   }
 } // __kmp_aux_set_defaults
+
+#ifdef REX_OMPITROP_SUPPORT
+void static interop_kmp_omp_thread_launcher(int gtid) {
+    kmp_info_t * kmp_thread = __kmp_threads[gtid];
+    omp_thread_t * th = (omp_thread_t*) kmp_thread->th.itrop_thr;
+    if (th->new_stack) {
+        /* use setjmp/longjmp pair to change stack */
+    }
+    th->start_routine(th->arg);
+    th->join_counter = 1;
+
+    if (th->new_stack) {
+        /* use setjmp/longjmp pair to change back to the original stack */
+    }
+
+    /* the free team will not free the original master thread, it will return the team and the thread back to the pool */
+    kmp_team_t * team = kmp_thread->th.th_team;
+    __kmp_free_team(kmp_thread->th.th_root, team, NULL);
+}
+
+int __kmp_omp_thread_create( omp_thread_t * th, int place, void *(*start_routine)(void *), void *arg, void * new_stack )
+{
+    KA_TRACE( 20, ("__kmp_omp_thread_create entered\n") );
+    th->start_routine = start_routine;
+    th->arg = arg;
+    th->new_stack = new_stack;
+    th->join_counter = 0;
+
+    int gtid = __kmp_get_gtid();
+    kmp_info_t * current_thr = __kmp_threads[ gtid ];
+    kmp_team_t * current_team = current_thr->th.th_team;
+    int current_tid = current_thr->th.th_info.ds.ds_tid;
+
+    kmp_root_t *root          = current_thr->th.th_root;
+
+    /* we call this function with 1 as team size so it will allocate team from either team pool or new allocation, and
+     * it will not use hot team which will automatically allocate kmp_info_t and thread for it */
+    kmp_team_t * team = __kmp_allocate_team(root, 1, 2,
+#if OMPT_SUPPORT
+            0,
+#endif
+#if OMP_40_ENABLED
+                                            current_thr->th.th_current_task->td_icvs.proc_bind,
+#endif
+                                            & current_thr->th.th_current_task->td_icvs,
+                                            0 USE_NESTED_HOT_ARG(NULL) );
+    team->t.t_master_tid = 0;
+    team->t.t_nproc = 2; /* change it to 2 threads in the team */
+    team->t.t_threads[0] = current_thr; //* to bypass a segfault problem in kmp_allocate_thread call to __kmp_get_x_global_icvs
+    KMP_CHECK_UPDATE(team->t.t_master_this_cons, current_thr->th.th_local.this_construct);
+    KMP_CHECK_UPDATE(team->t.t_ident, current_thr->th.th_ident);
+    KMP_CHECK_UPDATE(team->t.t_parent, current_thr->th.th_team);
+    team->t.t_pkfn = (microtask_t)1234;
+    team->t.t_invoke = VOLATILE_CAST(launch_t) interop_kmp_omp_thread_launcher;
+
+    /* grab a thread from thread pool or create a new one */
+    kmp_info_t * kmp_thread = __kmp_allocate_thread(root, team, 1);
+    kmp_thread->th.itrop_thr = th;
+    __kmp_initialize_info(current_thr, team, 0, gtid);
+    team->t.t_threads[1] = kmp_thread;
+
+   // int new_gtid = __kmp_gtid_from_thread(kmp_thread);
+
+    __kmp_fork_barrier(gtid, 0);
+
+    /* restore back the current thread to its original team (horibble hack) */
+    __kmp_initialize_info(current_thr, current_team, current_tid, gtid); /* or put myself back to the thread pool */
+
+    return 0;
+}
+
+kmp_info_t * __kmp_omp_thread_attach( void * new_stack, int * callback_flag ) {
+    /* we should first do initial check to see whether the runtime is on or not */
+    int new_gtid;
+    kmp_info_t * new_thr;
+    for( new_gtid=1 ; TCR_PTR(__kmp_threads[new_gtid]) != NULL; ++new_gtid ) {
+        KMP_DEBUG_ASSERT( new_gtid < __kmp_threads_capacity );
+    }
+
+    /* allocate space for it. */
+    new_thr = (kmp_info_t*) __kmp_allocate( sizeof(kmp_info_t) );
+
+    TCW_SYNC_PTR(__kmp_threads[new_gtid], new_thr);
+
+
+    return new_thr;
+
+}
+#endif
 
 /* ------------------------------------------------------------------------ */
 /* internal fast reduction routines */

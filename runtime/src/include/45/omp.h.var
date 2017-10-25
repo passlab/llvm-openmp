@@ -182,6 +182,49 @@
     extern void   __KAI_KMPC_CONVENTION  kmp_set_warnings_on(void);
     extern void   __KAI_KMPC_CONVENTION  kmp_set_warnings_off(void);
 
+#ifdef REX_OMPITROP_SUPPORT
+    /* interop API */
+    typedef enum omp_wait_policy {
+        OMP_RUNNING = 0,           /* doing useful work */
+        OMP_SPIN_BUSY_WAIT = 1,    /* busy wait (SPIN) in user space */
+        OMP_SPIN_PAUSE_WAIT = 2,   /* busy wait with cpu pause */
+        OMP_SPIN_YIELD_WAIT = 4,   /* busy wait with sched_yield */
+        OMP_SUSPEND_WAIT = 8,      /* suspend (sleep) */
+        OMP_TERMINATE = 16,        /* being killed */
+
+        OMP_ACTIVE_WAIT = OMP_SPIN_PAUSE_WAIT,
+        OMP_PASSIVE_WAIT = OMP_SUSPEND_WAIT,
+        OMP_ANY_WAIT = 999,
+    } omp_wait_policy_t;
+
+    typedef struct omp_thread {
+        void *(*start_routine)(void *);
+        void *arg;
+        void * new_stack;
+        volatile int join_counter;
+        void * rtval;
+    } omp_thread_t;
+    typedef struct omp_task omp_task_t;
+    typedef void * omp_runtime_handle_t;
+
+    extern void   __KAI_KMPC_CONVENTION  omp_set_wait_policy(omp_wait_policy_t );
+    extern int    __KAI_KMPC_CONVENTION  omp_get_wait_policy(void);
+    extern int    __KAI_KMPC_CONVENTION  omp_quiesce(omp_wait_policy_t);
+
+    extern int    __KAI_KMPC_CONVENTION  omp_thread_create (omp_thread_t * th, int place, void *(*start_routine)(void *), void *arg, void * new_stack);
+    extern void   __KAI_KMPC_CONVENTION  omp_thread_exit(void *value_ptr);
+    extern int    __KAI_KMPC_CONVENTION  omp_thread_join(omp_thread_t * thread, void **value_ptr);
+    extern int    __KAI_KMPC_CONVENTION  omp_thread_attach(omp_runtime_handle_t runtime, int place, void * new_stack, int * term_flag);
+
+    extern omp_thread_t * __KAI_KMPC_CONVENTION omp_get_initial_thread();
+    extern omp_runtime_handle_t    __KAI_KMPC_CONVENTION  omp_get_runtime_handle(void);
+    extern int    __KAI_KMPC_CONVENTION  omp_get_num_threads_runtime(omp_wait_policy_t state);
+    extern int    __KAI_KMPC_CONVENTION  omp_get_global_num_threads();
+    extern int    __KAI_KMPC_CONVENTION  omp_get_global_thread_num();
+    extern int __KAI_KMPC_CONVENTION    omp_task_create(omp_task_t * t, void *(*task_func)(void *), void * task_args, int (*task_test_func)(omp_task_t),
+                         int *intags, int num_intags, int * outtags, int num_outtags);
+#endif
+
 #   undef __KAI_KMPC_CONVENTION
 
     /* Warning:

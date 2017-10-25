@@ -474,6 +474,11 @@ KMP_ALIGN(128)
 kmp_lock_t __kmp_debug_lock; /* Control I/O access for KMP_DEBUG */
 #endif
 
+#ifdef REX_OMPITROP_SUPPORT
+omp_wait_policy_t omp_default_wait_policy = OMP_ACTIVE_WAIT;
+omp_runtime_handle_t omp_runtime_handle = (void*) & __kmp_threads;
+#endif
+
 /* ----------------------------------------------- */
 
 #if KMP_HANDLE_SIGNALS

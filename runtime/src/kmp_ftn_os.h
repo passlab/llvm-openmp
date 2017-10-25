@@ -131,6 +131,23 @@
 #define FTN_TARGET_ASSOCIATE_PTR omp_target_associate_ptr
 #define FTN_TARGET_DISASSOCIATE_PTR omp_target_disassociate_ptr
 #endif
+
+#ifdef REX_OMPITROP_SUPPORT
+#define FTN_SET_WAIT_POLICY                  omp_set_wait_policy
+#define FTN_GET_WAIT_POLICY                  omp_get_wait_policy
+#define FTN_QUIESCE                          omp_quiesce
+#define FTN_THREAD_CREATE                    omp_thread_create
+#define FTN_THREAD_EXIT                      omp_thread_exit
+#define FTN_THREAD_JOIN                      omp_thread_join
+#define FTN_THREAD_ATTACH                    omp_thread_attach
+#define FTN_GET_INITIAL_THREAD               omp_get_initial_thread
+#define FTN_GET_RUNTIME_HANDLE               omp_get_runtime_handle
+#define FTN_GET_NUM_THREADS_RUNTIME          omp_get_num_threads_runtime
+#define FTN_GET_GLOBAL_NUM_THREADS           omp_get_global_num_threads
+#define FTN_GET_GLOBAL_THREAD_NUM            omp_get_global_thread_num
+#define FTN_TASK_CREATE                      omp_task_create
+#endif
+
 #endif
 
 #endif /* KMP_FTN_PLAIN */
@@ -248,6 +265,22 @@
 #define FTN_TARGET_MEMCPY_RECT omp_target_memcpy_rect_
 #define FTN_TARGET_ASSOCIATE_PTR omp_target_associate_ptr_
 #define FTN_TARGET_DISASSOCIATE_PTR omp_target_disassociate_ptr_
+#endif
+
+#ifdef REX_OMPITROP_SUPPORT
+#define FTN_SET_WAIT_POLICY                  omp_set_wait_policy_
+#define FTN_GET_WAIT_POLICY                  omp_get_wait_policy_
+#define FTN_QUIESCE                          omp_quiesce_
+#define FTN_THREAD_CREATE                    omp_thread_create_
+#define FTN_THREAD_EXIT                      omp_thread_exit_
+#define FTN_THREAD_JOIN                      omp_thread_join_
+#define FTN_THREAD_ATTACH                    omp_thread_attach_
+#define FTN_GET_INITIAL_THREAD               omp_get_initial_thread_
+#define FTN_GET_RUNTIME_HANDLE               omp_get_runtime_handle_
+#define FTN_GET_NUM_THREADS_RUNTIME          omp_get_num_threads_runtime_
+#define FTN_GET_GLOBAL_NUM_THREADS           omp_get_global_num_threads_
+#define FTN_GET_GLOBAL_THREAD_NUM            omp_get_global_thread_num_
+#define FTN_TASK_CREATE                      omp_task_create_
 #endif
 #endif
 
@@ -367,6 +400,22 @@
 #define FTN_TARGET_ASSOCIATE_PTR OMP_TARGET_ASSOCIATE_PTR
 #define FTN_TARGET_DISASSOCIATE_PTR OMP_TARGET_DISASSOCIATE_PTR
 #endif
+
+#ifdef REX_OMPITROP_SUPPORT
+#define FTN_SET_WAIT_POLICY                  OMP_SET_WAIT_POLICY
+#define FTN_GET_WAIT_POLICY                  OMP_GET_WAIT_POLICY
+#define FTN_QUIESCE                          OMP_QUIESCE
+#define FTN_THREAD_CREATE                    OMP_THREAD_CREATE
+#define FTN_THREAD_EXIT                      OMP_THREAD_EXIT
+#define FTN_THREAD_JOIN                      OMP_THREAD_JOIN
+#define FTN_THREAD_ATTACH                    OMP_THREAD_ATTACH
+#define FTN_GET_INITIAL_THREAD               OMP_GET_INITIAL_THREAD
+#define FTN_GET_RUNTIME_HANDLE               OMP_GET_RUNTIME_HANDLE
+#define FTN_GET_NUM_THREADS_RUNTIME          OMP_GET_NUM_THREADS_RUNTIME
+#define FTN_GET_GLOBAL_NUM_THREADS           OMP_GET_GLOBAL_NUM_THREADS
+#define FTN_GET_GLOBAL_THREAD_NUM            OMP_GET_GLOBAL_THREAD_NUM
+#define FTN_TASK_CREATE                      OMP_TASK_CREATE
+#endif
 #endif
 
 #endif /* KMP_FTN_UPPER */
@@ -484,6 +533,21 @@
 #define FTN_TARGET_MEMCPY_RECT OMP_TARGET_MEMCPY_RECT_
 #define FTN_TARGET_ASSOCIATE_PTR OMP_TARGET_ASSOCIATE_PTR_
 #define FTN_TARGET_DISASSOCIATE_PTR OMP_TARGET_DISASSOCIATE_PTR_
+#endif
+#ifdef REX_OMPITROP_SUPPORT
+#define FTN_SET_WAIT_POLICY                  OMP_SET_WAIT_POLICY_
+#define FTN_GET_WAIT_POLICY                  OMP_GET_WAIT_POLICY_
+#define FTN_QUIESCE                          OMP_QUIESCE_
+#define FTN_THREAD_CREATE                    OMP_THREAD_CREATE_
+#define FTN_THREAD_EXIT                      OMP_THREAD_EXIT_
+#define FTN_THREAD_JOIN                      OMP_THREAD_JOIN_
+#define FTN_THREAD_ATTACH                    OMP_THREAD_ATTACH_
+#define FTN_GET_INITIAL_THREAD               OMP_GET_INITIAL_THREAD_
+#define FTN_GET_RUNTIME_HANDLE               OMP_GET_RUNTIME_HANDLE_
+#define FTN_GET_NUM_THREADS_RUNTIME          OMP_GET_NUM_THREADS_RUNTIME_
+#define FTN_GET_GLOBAL_NUM_THREADS           OMP_GET_GLOBAL_NUM_THREADS_
+#define FTN_GET_GLOBAL_THREAD_NUM            OMP_GET_GLOBAL_THREAD_NUM_
+#define FTN_TASK_CREATE                      OMP_TASK_CREATE_
 #endif
 #endif
 

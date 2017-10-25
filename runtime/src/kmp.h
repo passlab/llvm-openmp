@@ -230,6 +230,21 @@ typedef union kmp_team kmp_team_p;
 typedef union kmp_info kmp_info_p;
 typedef union kmp_root kmp_root_p;
 
+#ifndef __OMP_H
+typedef enum omp_wait_policy {
+    OMP_RUNNING = 0,           /* doing useful work */
+    OMP_SPIN_BUSY_WAIT = 1,    /* busy wait (SPIN) in user space */
+    OMP_SPIN_PAUSE_WAIT = 2,   /* busy wait with cpu pause */
+    OMP_SPIN_YIELD_WAIT = 4,   /* busy wait with sched_yield */
+    OMP_SUSPEND_WAIT = 8,      /* suspend (sleep) */
+    OMP_TERMINATE = 16,        /* being killed */
+
+    OMP_ACTIVE_WAIT = OMP_SPIN_PAUSE_WAIT,
+    OMP_PASSIVE_WAIT = OMP_SUSPEND_WAIT,
+    OMP_ANY_WAIT = 999,
+} omp_wait_policy_t;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -2384,6 +2399,16 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
   kmp_uint64 th_team_bt_intervals;
 #endif
 
+/* OpenMP Interoperability support as part of REX runtime */
+#ifdef REX_OMPITROP_SUPPORT
+/* thread-specific blocktime, and other interop fileds */
+  omp_wait_policy_t  th_wait_policy;
+  omp_wait_policy_t  th_wait_state;
+  int                th_blocktime;
+  int                th_wait_policy_set;
+  void * itrop_thr;
+#endif
+
 #if KMP_AFFINITY_SUPPORTED
   kmp_affin_mask_t *th_affin_mask; /* thread's current affinity mask */
 #endif
@@ -2666,6 +2691,11 @@ typedef struct kmp_base_root {
   volatile int r_begin;
   int r_blocktime; /* blocktime for this root and descendants */
   int r_cg_nthreads; // count of active threads in a contention group
+
+#ifdef REX_OMPITROP_SUPPORT
+  omp_wait_policy_t   r_wait_policy;  /* the wait policy for the decendent thread of this root */
+  int                 r_wait_policy_set;
+#endif
 } kmp_base_root_t;
 
 typedef union KMP_ALIGN_CACHE kmp_root {
@@ -3784,6 +3814,25 @@ typedef enum omp_sched_t {
   omp_sched_auto = 4
 } omp_sched_t;
 typedef void *kmp_affinity_mask_t;
+#endif
+
+#ifdef REX_OMPITROP_SUPPORT
+#ifndef __OMP_H
+typedef struct omp_thread {
+  void *(*start_routine)(void *);
+  void *arg;
+  void * new_stack;
+  volatile int join_counter;
+  void * rtval;
+} omp_thread_t;
+typedef struct omp_task omp_task_t;
+typedef void * omp_runtime_handle_t;
+#endif
+
+/* the gloal variable (ICV) for the wait policy, thus omp_set_wait_policy can only be called in sequential region */
+extern omp_wait_policy_t omp_default_wait_policy; /* defined in kmp_global.c */
+extern omp_runtime_handle_t omp_runtime_handle;
+extern int __kmp_omp_thread_create( omp_thread_t * th, int place, void *(*start_routine)(void *), void *arg, void * new_stack );
 #endif
 
 KMP_EXPORT void KMPC_CONVENTION ompc_set_max_active_levels(int);
