@@ -13,7 +13,7 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            git clone https://github.com/passlab/llvm-openmp 
            cd llvm-openmp
            git remote update
-           git checkout -b rex_kmpapi
+           git checkout -t origin/rex_kmpapi  # check out rex_kmpapi branch that tracks the same remote branch from origin
           
   1. `cmake` to create the makefile with the LIBOMP_* setting you want and `make` to build the library and the header files
   
