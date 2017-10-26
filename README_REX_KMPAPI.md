@@ -15,18 +15,19 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            git remote update
            git checkout -b rex_kmpapi
           
-  1. cmake to create the makefile with the LIBOMP_* setting you want
+  1. cmake to create the makefile with the LIBOMP_* setting you want and make to build the library and the header files
   
            mkdir build
            cd build
-           cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on -DCMAKE_INSTALL_PREFIX=<install_path> ..
-           make; make install
+           cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on ..
+           make
+     The `make` command will build the runtime source codes into a library, the libomp.so file and create the header files (omp.h and rex_kmp.h) for the library. Those files are located in `runtime/src` folder under the `build` folder you are working on. 
            
-      For using other compiler (on fornax), CC and CXX should be set for cmake. For example, on fornax as standalone: 
+     For using other compiler (on fornax), CC and CXX should be set for cmake. For example, on fornax as standalone: 
       
-           CC=/opt/gcc-5.3.0-install/bin/gcc CXX=/opt/gcc-5.3.0-install/bin/g++ cmake -DLIBOMP_REX_KMPAPI_SUPPORT=on -DCMAKE_INSTALL_PREFIX=<install_path> ..
+           CC=/opt/gcc-5.3.0-install/bin/gcc CXX=/opt/gcc-5.3.0-install/bin/g++ cmake -DLIBOMP_REX_KMPAPI_SUPPORT=on ..
            
-     Each time you change the source code, either rex_kmp.h or rex_kmp.cpp file, and you want to test, you will need to do `make; make install` command. 
+     Each time you change the source code, either rex_kmp.h or rex_kmp.cpp file, and you want to test, you will need `make` command so . 
            
   1. location for header files (omp.h, rex_kmp.h, and ompt.h) and libomp.so library are `<install_path>/include` and
   `<install_path>/lib` if the runtime is installed standalone. If it is installed as part of clang/llvm, the header 
