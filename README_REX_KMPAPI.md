@@ -37,7 +37,7 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
    
            cd ../runtime/test/rex_kmpapi
            make # create the parallel executable
-           export LD_LIBRARY_PATH=/home/yanyh/llvm-openmp/build/runtime/src:$LD_LIBRARY
+           export LD_LIBRARY_PATH=/home/yanyh/llvm-openmp/build/runtime/src:$LD_LIBRARY_PATH
            ldd parallel  # to check whether parallel executable will use the library (libomp.so) you just built before. 
            ./parallel
    
@@ -48,8 +48,7 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
    1. Please write other test files for other OpenMP functions
 
 ## Implementation
-  1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly
-  refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
+  1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
 
 ## Resources
   1. [Reference manual for Intel OpenMP runtime library](https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf). From the same website for Intel OpenMP runtime library, [https://www.openmprtl.org](https://www.openmprtl.org), you can find more information. The PDF file on the web is not up to date
