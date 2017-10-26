@@ -22,8 +22,8 @@ The [runtime/CMakeLists.txt](runtime/CMakeLists.txt) and [runtime/src/CMakeLists
            git clone https://github.com/passlab/llvm-openmp 
            cd llvm-openmp
            git remote update
-           git checkout -b rex_kmpapi
-          
+           git checkout -t origin/rex_kmpapi   
+           
   1. cmake to create the makefile with the LIBOMP_* setting you want
   
            mkdir BUILD
