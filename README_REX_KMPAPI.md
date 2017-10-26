@@ -21,6 +21,7 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            cd build
            cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on ..
            make
+           
      The `make` command will build the runtime source codes into a library, the `libomp.so` file and create the header files (`omp.h` and `rex_kmp.h`) for the library. Those files are located in `runtime/src` folder under the `build` folder you are working on. 
            
      For using other compiler (on fornax), `CC` and `CXX` should be set for `cmake`. For example, on fornax: 
