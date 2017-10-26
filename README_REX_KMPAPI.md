@@ -42,9 +42,9 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            ldd parallel  # to check whether parallel executable will use the library (libomp.so) you just built before. 
            ./parallel
    
-     The `export LD_LIBRARY_PATH=...` command setups the library path for the executable by letting LD_LIBRARY_PATH environment variable to include the lib path, which is `/home/yanyh/llvm-openmp/build/runtime/src`. 
+   The `export LD_LIBRARY_PATH=...` command setups the library path for the executable by letting LD_LIBRARY_PATH environment variable to include the lib path, which is `/home/yanyh/llvm-openmp/build/runtime/src`. 
      
-     Check the `Makefile` to see how the flags are set for compiling the `parallel.c` file. If you need to use the library and the header file for your development, you need to provide the header path and lib path to the `-I` and `-L` flags of the compiler.
+   Check the `Makefile` to see how the flags are set for compiling the `parallel.c` file. If you need to use the library and the header file for your development, you need to provide the header path and lib path to the `-I` and `-L` flags of the compiler.
      
    1. Please write other test files for other OpenMP functions
 
