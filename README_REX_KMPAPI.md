@@ -51,6 +51,18 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 ## Implementation
   1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
   
+| Features               | C           | C++                     |
+|------------------------|-------------|-------------------------|
+| parallel/single/master |             |                         |
+| worksharing            |             | TBB/Kokkos/AMP          |
+| tasking                | starPU, etc | std::async, std::future |
+| accelerator            |             |                         |
+| affinity               |             |                         |
+| simd                   | cilkplus    |                         |
+| concurrent             |             |                         |
+| data                   |             | Kokkos                  |
+  
+  
 ## Implementation Tasks:
 For C++ implementation, we should try and experiment the most recent standard features or features in development. [C++11](https://en.wikipedia.org/wiki/C%2B%2B11) and [BOOST](http://www.boost.org/doc/libs/). 
 1. C++ interface and implementation for rex::parallel, single, master, barrier, get_thread_num, get_num_threads. We need to consider to use those recent and advanced features of C++ including [varadic template](https://eli.thegreenplace.net/2014/variadic-templates-in-c/) and lambda (Madushan), reference: C++11 thread/join
