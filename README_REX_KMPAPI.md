@@ -50,6 +50,13 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 
 ## Implementation
   1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
+  
+## Implementation Tasks:
+For C++ implementation, we should try and experiment the most recent standard features or features in development. [C++11](https://en.wikipedia.org/wiki/C%2B%2B11) and [BOOST](http://www.boost.org/doc/libs/). 
+1. C++ interface and implementation for rex::parallel, single, master, barrier, get_thread_num, get_num_threads. We need to consider to use those recent and advanced features of C++ including [varadic template](https://eli.thegreenplace.net/2014/variadic-templates-in-c/) and lambda (Madushan), reference: C++11 thread/join
+1. C interface for worksharing, e.g. rex_parallel_for ( ... ) (Kewei), reference: TBB/Kokkos/AMP_PPL parallel_for
+1. C++ interface for worksharing
+1. C/C++ interface for tasking, reference: std::async and std::future and other tasking runtime
 
 ## Resources and References
   1. [Reference manual for Intel OpenMP runtime library](https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf). From the same website for Intel OpenMP runtime library, [https://www.openmprtl.org](https://www.openmprtl.org), you can find more information. The PDF file on the web is not up to date
