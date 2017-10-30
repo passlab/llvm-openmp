@@ -56,3 +56,9 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
   with the latest development, and you can build that PDF file or HTML from the source tree. More info can be found from [www](www) folder. 
   1. A ROSE-based OpenMP 3.0 Research Compiler Supporting [Multiple Runtime Libraries (XOMP)](http://rosecompiler.org/ROSE_ResearchPapers/2010-06-AROSEBasedOpenMP3.0ResearchCompiler-IWOMP.pdf)
   1. Kokkos from Sandia: [github](https://github.com/kokkos), Citation: [Kokkos: Enabling manycore performance portability through polymorphic memory access patterns](http://www.sciencedirect.com/science/article/pii/S0743731514001257), [Kokkos Programming Guide](https://fossies.org/linux/Trilinos-trilinos-release/packages/kokkos/doc/Kokkos_PG.pdf], [Kokkos Tutorial](https://github.com/kokkos/kokkos-tutorials)
+  1. C++ Multithreading(http://www.cplusplus.com/reference/multithreading/), e.g. [std::thread and std::join](http://www.cplusplus.com/reference/thread/thread/), [std::async and std::future](http://www.cplusplus.com/reference/future/). More information can be found from a book [C++ Concurrency in Action
+Practical Multithreading](https://livebook.manning.com/#!/book/c-plus-plus-concurrency-in-action), or [some blogs that are easy to read]
+(http://www.bogotobogo.com/cplusplus/C11/1_C11_creating_thread.php).
+  1. Threading Building Blocks (TBB)(https://www.threadingbuildingblocks.org/)
+  1. [HPX](https://github.com/STEllAR-GROUP/hpx)
+  1. [Legion](http://legion.stanford.edu/)
