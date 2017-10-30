@@ -51,7 +51,8 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 ## Implementation
   1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
 
-## Resources
+## Resources and References
   1. [Reference manual for Intel OpenMP runtime library](https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf). From the same website for Intel OpenMP runtime library, [https://www.openmprtl.org](https://www.openmprtl.org), you can find more information. The PDF file on the web is not up to date
   with the latest development, and you can build that PDF file or HTML from the source tree. More info can be found from [www](www) folder. 
   1. A ROSE-based OpenMP 3.0 Research Compiler Supporting [Multiple Runtime Libraries (XOMP)](http://rosecompiler.org/ROSE_ResearchPapers/2010-06-AROSEBasedOpenMP3.0ResearchCompiler-IWOMP.pdf)
+  1. Kokkos from Sandia: [github](https://github.com/kokkos), Citation: [Kokkos: Enabling manycore performance portability through polymorphic memory access patterns](http://www.sciencedirect.com/science/article/pii/S0743731514001257), [Kokkos Programming Guide](https://fossies.org/linux/Trilinos-trilinos-release/packages/kokkos/doc/Kokkos_PG.pdf], [Kokkos Tutorial](https://github.com/kokkos/kokkos-tutorials)
