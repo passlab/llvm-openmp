@@ -54,7 +54,7 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 | Features               | C           | C++                     |
 |------------------------|-------------|-------------------------|
 | parallel/single/master |             |                         |
-| worksharing            |             | TBB/Kokkos/AMP/RAJA          |
+| worksharing            |             | TBB/Kokkos/AMP/RAJA     |
 | tasking                | starPU, etc | std::async, std::future |
 | accelerator            |             |                         |
 | affinity               |             |                         |
