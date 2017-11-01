@@ -81,3 +81,4 @@ Practical Multithreading](https://livebook.manning.com/#!/book/c-plus-plus-concu
   1. Threading Building Blocks (TBB)(https://www.threadingbuildingblocks.org/)
   1. [HPX](https://github.com/STEllAR-GROUP/hpx)
   1. [Legion](http://legion.stanford.edu/)
+  1. [RAJA](https://github.com/LLNL/RAJA)
