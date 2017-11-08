@@ -61,6 +61,13 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 | simd                   | cilkplus    |                         |
 | concurrent             |             |                         |
 | data                   |             | Kokkos                  |
+
+### Header file name
+| Features               | C                  | C++                     |  
+|------------------------|--------------------|-------------------------|
+| parallel/single/master |  rex_paralle_c.h   |    rex_parallel_cxx.h   |
+| worksharing            |  rex_for_c.h       |    rex_for_cxx.h        |
+| tasking                |  rex_task_c.h      |    rex_task_cxx.h       |
   
   
 ## Implementation Tasks:
