@@ -39,6 +39,60 @@ extern int rex_single_1();
 extern void rex_end_single(int gtid);
 extern void rex_end_single_1();
 
+/* for worksharing */
+typedef enum rex_sched_type {
+    REX_SCHED_STATIC,
+    REX_SCHED_DYNAMIC,
+    REX_SCHED_GUIDED,
+} rex_sched_type_t;
+
+typedef void* (*for_body_1) (int i, void * arg1);
+typedef void* (*for_body_2) (int i, void * arg1, void * arg2);
+typedef void* (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
+
+/* Worksharing API */
+/**
+ * called within a parallel function
+ * @param low
+ * @param up
+ * @param stride
+ * @param sched_type: make sure you find the mapping of our definition of sched_type to kmp's enum definition of sched_type
+ *                    in kmp.h:313
+ * @param chunk
+ * @param for_body_1
+ * @param args
+ *
+ * For STATIC schedule, please check kmp_sched.cpp file to see how __kmpc_for_static_init_4 is called and should be used
+ *
+ * For DYNAMIC and GUIDED schedule, please check kmp_dispatch.cpp file to see how __kmpc_dist_dispatch_init_4, __kmpc_dispatch_next_4, and
+ * __kmpc_dispatch_fini_4 should be used to make a correct call here.
+ * Check the https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf page 12 to see how loop is transformed. And you may
+ * also need to see the compiler IR dump to see which function is called.
+ *
+ * Rewrite the runtime/test/rex_kmpapi/rex_for.c example to use our interface rex_parallel and rex_for
+ */
+void rex_for(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
+
+/**
+ * tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c
+ * and runtime/src/kmp_tasking.cpp files to figure out how the three __kmpc_
+ * functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three
+ * functions to implement our rex_ related tasking interface.
+ *
+ * Rewrite the rex_fib.c example using our interface for testing our interface, you need to use rex_parallel and rex_single as well.
+ */
+
+typedef void rex_task_t; /* even rex_task_t is exported as void type, internally it is kmp_task_t type so we can work around the inclusion of the kmp.h file */
+typedef void* (*task_func_1) (void * arg1);
+typedef void* (*task_func_2) (void * arg1, void * arg2);
+typedef void* (*task_func_3) (void * arg1, void * arg2, void * arg3);
+
+rex_task_t * rex_create_task_1(task_func_1 * task_fun, void * arg1);
+void * rex_sched_task(rex_task_t * t);
+void * rex_taskwait();
+
+rex_task_t * rex_create_task_2(task_func_1 * task_fun, void * arg1, void * arg2);
+
 /* util */
 extern double read_timer_ms();
 extern double read_timer();
