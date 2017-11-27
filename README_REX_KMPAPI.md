@@ -16,13 +16,13 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            git checkout -t origin/rex_kmpapi  # check out rex_kmpapi branch that tracks the same remote branch from origin
 	   
   1. Keep your local repo updated from the github repo: in the llvm-openmp folder (need to do if you want to get the latest changes)
-        
-	   git pull
+  
+          git pull
 	   
   1. Commit your local changes to your local repo, i.e. save your changes permanatly in the local repo:
    
            git add <changed files>
-	   git commit -m "<Summary of changes>"
+           git commit -m "<Summary of changes>"
 	  
   1. `cmake` to create the makefile with the LIBOMP_* setting you want and `make` to build the library and the header files
   
