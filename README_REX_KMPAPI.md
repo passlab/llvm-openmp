@@ -48,9 +48,21 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
      
    1. Please write other test files for other OpenMP functions
 
-## Implementation
-  1. All the implementation should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
+## Implementation in C
+  1. We will implement three sets of interfaces (API): parallel/single/master, worksharing and tasking. All the implementation of the interfaces should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. For each set of interface implemented, at least one test file should be created to experiment and debug the implementation. 
+    1. worksharing/single/master API: `rex_parallel`, `rex_single`, `rex_end_single`, `rex_master`, `rex_end_master` and `rex_barrier` 
+       are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/parallel.c`](runtime/test/rex_kmpapi/parallel.c). 
+       Please refer to the test file for how to use those interfaces. 
+    1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/rex_for.c`](runtime/test/rex_kmpapi/rex_for.c). 
+       Please program rex_for.c file first to make it compilable with the new API. 
+    1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. 
+       
   
+  You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
+  
+  
+### Implementation with C++ interfaces (TBD)
+
 | Features               | C           | C++                     |
 |------------------------|-------------|-------------------------|
 | parallel/single/master |             | TBB/Kokkos/AMP/RAJA     |
@@ -61,20 +73,11 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
 | simd                   | cilkplus    |                         |
 | concurrent             |             |                         |
 | data                   |             | Kokkos                  |
-
-### Header and source files
-| Features               | C                    |            C++              |  
-|------------------------|----------------------|-----------------------------|
-| parallel/single/master |  rex_paralle_c.h/c   |    rex_parallel_cxx.h/cpp   |
-| worksharing            |  rex_for_c.h/c       |    rex_for_cxx.h/cpp        |
-| tasking                |  rex_task_c.h/c      |    rex_task_cxx.h/cpp       |
   
-  
-## Implementation Tasks:
+#### Implementation Tasks:
 For C++ implementation, we should try and experiment the most recent standard features or features in development. [C++11](https://en.wikipedia.org/wiki/C%2B%2B11) and [BOOST](http://www.boost.org/doc/libs/). 
 1. C++ interface and implementation for rex::parallel, single, master, barrier, get_thread_num, get_num_threads. We need to consider to use those recent and advanced features of C++ including [varadic template](https://eli.thegreenplace.net/2014/variadic-templates-in-c/) and lambda (Madushan), reference: C++11 thread/join
-1. C interface for worksharing, e.g. rex_parallel_for ( ... ) (Kewei), reference: TBB/Kokkos/AMP_PPL parallel_for
-1. C++ interface for worksharing (Kewei)
+1. C++ interface for worksharing
 1. C/C++ interface for tasking, reference: std::async and std::future and other tasking runtime
 
 ## Resources and References
