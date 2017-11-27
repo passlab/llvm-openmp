@@ -49,13 +49,15 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
    1. Please write other test files for other OpenMP functions
 
 ## Implementation in C
-  1. We will implement three sets of interfaces (API): parallel/single/master, worksharing and tasking. All the implementation of the interfaces should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. For each set of interface implemented, at least one test file should be created to experiment and debug the implementation. 
-    1. worksharing/single/master API: `rex_parallel`, `rex_single`, `rex_end_single`, `rex_master`, `rex_end_master` and `rex_barrier` 
-       are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/parallel.c`](runtime/test/rex_kmpapi/parallel.c). 
-       Please refer to the test file for how to use those interfaces. 
-    1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/rex_for.c`](runtime/test/rex_kmpapi/rex_for.c). 
-       Please program rex_for.c file first to make it compilable with the new API. 
-    1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. 
+We will implement three sets of interfaces (API): parallel/single/master, worksharing and tasking. All the implementation of the interfaces should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. For each set of interface implemented, at least one test file should be created to experiment and debug the implementation. 
+  1. worksharing/single/master API: `rex_parallel`, `rex_single`, `rex_end_single`, `rex_master`, `rex_end_master` and `rex_barrier` 
+     are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/parallel.c`](runtime/test/rex_kmpapi/parallel.c). 
+     Please refer to the test file for how to use those interfaces. 
+  1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/rex_for.c`](runtime/test/rex_kmpapi/rex_for.c). 
+     Please program rex_for.c file first to make it compilable with the new API.  For DYNAMIC and GUIDED schedule, please check
+     kmp_dispatch.cpp file to see how __kmpc_dist_dispatch_init_4, __kmpc_dispatch_next_4, and __kmpc_dispatch_fini_4 should be used to make a correct call here. Check the https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf page 12 to see how loop is transformed. 
+     
+  1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. Tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c and runtime/src/kmp_tasking.cpp files to figure out how the three __kmpc_ functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three functions to implement our rex_ related tasking interface.
        
   
   You will need mostly refer to the API for KMP compiler support, which is [runtime/src/kmp_csupport.cpp](runtime/src/kmp_csupport.cpp), and others including the support for tasking. 
