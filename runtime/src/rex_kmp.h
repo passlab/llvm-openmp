@@ -20,7 +20,7 @@ extern int rex_get_num_threads_in_team();
 extern int rex_in_parallel( );
 extern void rex_set_num_threads(int num_threads );
 
-typedef void (*rex_pfunc_t)    (int * global_tid, int * team_tid, ... );
+typedef void (*rex_pfunc_t)    (int * global_tid, int * num_args, ... );
 extern void rex_parallel(int num_threads, rex_pfunc_t func, int num_shared, ...);
 extern void rex_parallel_1(rex_pfunc_t func, int num_shared, ...);
 

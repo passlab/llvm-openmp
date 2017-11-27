@@ -17,15 +17,19 @@ double read_timer() {
     return read_timer_ms() * 1.0e-3;
 }
 
-void hello_microtask(int * global_tid, int * bound_tid, char * msg )
+/**
+ * global_id is the default and has to be provided
+ * num_args is 2 in this example. 
+ */
+void hello_microtask(int * global_tid, int num_args, char * msg, int intmsg )
 {
     /* 
     va_list ap;
-    va_start(ap, bound_tid);
+    va_start(ap, num_args);
     char * msg = va_arg(ap, char *);
     va_end(ap);
     */
-    printf("Hello World: %d (gid: %d) of %d: msg: %s\n", omp_get_thread_num(), *global_tid, omp_get_num_threads(), msg);
+    printf("Hello World: %d (gid: %d) of %d: msg: %s, intmsg: %d\n", omp_get_thread_num(), *global_tid, omp_get_num_threads(), msg, intmsg);
     /* for master construct */
     if (rex_master(*global_tid)) {
         printf("Master greeting: (gid: %d)\n", *global_tid);
@@ -57,11 +61,11 @@ int main(int argc, char *argv[])
     double times = read_timer();
     int current_thread = rex_get_global_thread_num();
     printf("========================================================\n");
-    rex_parallel(nums, (rex_pfunc_t)hello_microtask, 1, "naked runtime");
+    rex_parallel(nums, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 0);
 
     printf("========================================================\n");
     for (i=0; i<num_runs; i++) {
-        rex_parallel(nums/2, (rex_pfunc_t)hello_microtask, 1, "naked runtime");
+        rex_parallel(nums/2, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 1);
     }
     nums = rex_get_total_num_threads();
     printf("Result (%d threads): %f, current_thread: %d\n", nums, times/num_runs, current_thread);
@@ -69,7 +73,7 @@ int main(int argc, char *argv[])
     
     times = read_timer();
     printf("========================================================\n");
-    rex_parallel(nums*2, (rex_pfunc_t)hello_microtask, 1, "naked runtime");
+    rex_parallel(nums*2, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 2);
     times = read_timer() - times;
 
     nums = rex_get_total_num_threads();

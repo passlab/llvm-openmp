@@ -181,13 +181,13 @@ static void __rex_to_kmp_fork_call(ident_t *loc, int gtid, kmp_int32 argc, kmpc_
     }
 }
 
-void rex_parallel(int num_threads, rex_pfunc_t func, int num_shared, ...)
+void rex_parallel(int num_threads, rex_pfunc_t func, int num_args, ...)
 {
     int current_thread = __kmpc_global_thread_num(NULL);
     __kmpc_push_num_threads(NULL, current_thread, num_threads );
     va_list ap;
-    va_start(ap, num_shared);
-    __rex_to_kmp_fork_call(NULL, current_thread, num_shared, func,
+    va_start(ap, num_args);
+    __rex_to_kmp_fork_call(NULL, current_thread, num_args, func,
 #if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
             &ap
 #else
@@ -197,12 +197,12 @@ void rex_parallel(int num_threads, rex_pfunc_t func, int num_shared, ...)
     va_end(ap);
 }
 
-void rex_parallel_1(rex_pfunc_t func, int num_shared, ...)
+void rex_parallel_1(rex_pfunc_t func, int num_args, ...)
 {
     int current_thread = __kmpc_global_thread_num(NULL);
     va_list ap;
-    va_start(ap, num_shared);
-    __rex_to_kmp_fork_call(NULL, current_thread, num_shared, func,
+    va_start(ap, num_args);
+    __rex_to_kmp_fork_call(NULL, current_thread, num_args, func,
 #if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
             &ap
 #else
