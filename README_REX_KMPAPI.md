@@ -64,7 +64,8 @@ We will implement three sets of interfaces (API): parallel/single/master, worksh
      Please refer to the test file for how to use those interfaces. 
      
   1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/rex_for.c`](runtime/test/rex_kmpapi/rex_for.c). 
-     Please program rex_for.c file first to make it compilable with the new API.  For DYNAMIC and GUIDED schedule, please check
+     Please program rex_for.c file first to make it compilable with the new API. For STATIC schedule, please check kmp_sched.cpp file to
+     see how __kmpc_for_static_init_4 is called and should be used. For DYNAMIC and GUIDED schedule, please check
      kmp_dispatch.cpp file to see how __kmpc_dist_dispatch_init_4, __kmpc_dispatch_next_4, and __kmpc_dispatch_fini_4 should be used to make a correct call here. Check the https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf page 12 to see how loop is transformed. 
      
   1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. Tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c and runtime/src/kmp_tasking.cpp files to figure out how the three __kmpc_ functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three functions to implement our rex_ related tasking interface.
