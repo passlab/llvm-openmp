@@ -60,7 +60,7 @@ We will implement three sets of interfaces (API): parallel/single/master, worksh
      
   1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. Tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c and runtime/src/kmp_tasking.cpp files to figure out how the three __kmpc_ functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three functions to implement our rex_ related tasking interface.
       
-Your testing should make sure that the test file is compiled, linked and executed correctly using your interface. The Makefile target for each test file, e.g. for parallel.c has two commands: the first one is to compile your test file to make sure it uses the APIs correctly, the second one is to link with the library that provide the implementation of the APIs and the execution of the `parallel` is for verifying the correctness of your implementation. 
+Your testing should make sure that the test file is compiled, linked and executed correctly using your interface. The [`runtime/test/rex_kmpapi/Makefile`](runtime/test/rex_kmpapi/Makefile) target for each test file, e.g. for parallel.c has two commands: the first one is to compile your test file to make sure it uses the APIs correctly, the second one is to link with the library that provide the implementation of the APIs and the execution of the `parallel` is for verifying the correctness of your implementation. 
 
 ````
 parallel: parallel.c
