@@ -22,7 +22,6 @@
 
 #include "rex_kmp.h"
 
-
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -282,7 +281,22 @@ void rex_end_single_1()
     __kmpc_end_single(NULL, __kmp_get_gtid());
 }
 
-void rex_for(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
+void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
+    auto int i_7_pr;
+    auto int lower, upper, liter, incr;
+    liter = 0;
+    __kmpc_dispatch_init_4(NULL, *gtid, 35, 0, 9, 1, 1 );
+    while ( __kmpc_dispatch_next_4( & loc7, *gtid, & liter, & lower, & upper, & incr
+    ) ) {
+        for( i_7_pr = lower; upper >= i_7_pr; i_7_pr ++ )
+            for_body_1(i_7_pr, args);
+    }
+}
+
+/**
+ * No need to implement
+ */
+void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
 #if 0
     if (sched_type == REX_SCHED_STATIC) {
         int lastiter;

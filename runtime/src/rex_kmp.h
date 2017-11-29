@@ -46,6 +46,8 @@ typedef enum rex_sched_type {
     REX_SCHED_GUIDED,
 } rex_sched_type_t;
 
+#define REX_DEFAULT_CHUNK_SIZE -1
+
 typedef void* (*for_body_1) (int i, void * arg1);
 typedef void* (*for_body_2) (int i, void * arg1, void * arg2);
 typedef void* (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
@@ -71,7 +73,19 @@ typedef void* (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
  *
  * Rewrite the runtime/test/rex_kmpapi/rex_for.c example to use our interface rex_parallel and rex_for
  */
-void rex_for(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
+void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
+
+/**
+ * A simpler implementation that always use dynamic schedule policy
+ * @param low
+ * @param up
+ * @param stride
+ * @param sched_type
+ * @param chunk
+ * @param for_body_1
+ * @param args
+ */
+void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
 
 /**
  * tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c
