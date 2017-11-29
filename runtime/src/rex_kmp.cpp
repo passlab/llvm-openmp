@@ -22,6 +22,30 @@
 
 #include "rex_kmp.h"
 
+/**
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *
+ * A temp solution to use the OpenMP exported interface. We should put this in a file named, e.g.
+ * rex_kmp_internal.h and include. We will do this later.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid, kmp_int32 schedtype,
+                              kmp_int32 *plastiter, kmp_int32 *plower,
+                              kmp_int32 *pupper, kmp_int32 *pstride,
+                              kmp_int32 incr, kmp_int32 chunk);
+
+#ifdef __cplusplus
+}
+#endif
+/**
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
@@ -282,6 +306,11 @@ void rex_end_single_1()
 }
 
 void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
+    int lastiter;
+    __kmpc_for_static_init_4(NULL, __kmp_get_global_thread_id(), kmp_sch_static,
+    &lastiter, &low, &up, &stride, 0, 0);
+
+#if 0
     auto int i_7_pr;
     auto int lower, upper, liter, incr;
     liter = 0;
@@ -291,6 +320,7 @@ void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, vo
         for( i_7_pr = lower; upper >= i_7_pr; i_7_pr ++ )
             for_body_1(i_7_pr, args);
     }
+#endif
 }
 
 /**
