@@ -31,8 +31,8 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on ..     
 	   
   1. `make` to build the library and the header files. Each time you change runtime source code (e.g. rex_kmp.cpp, rex_kmp.h, or pull in changes from the github repo), you need to do a `make` in the `build` folder
-          
-	   make
+
+           make
 	  
      The `make` command will build the runtime source codes into a library, the `libomp.so` file and create the header files (`omp.h` and `rex_kmp.h`) for the library. Those files are located in `runtime/src` folder under the `build` folder you are working on. 
            
