@@ -46,17 +46,17 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
      `make` is a utility for easily building multiple source codes. It use a file named `Makefile` that contains the recipes for how to compile and link the files using compiler and linker. `cmake` is the utility for creating that `Makefile` in a much more easier and portable way than handwriting. It processes a file called `CMakeLists.txt` to create the `Makefile` needed for `make`. 
     
  ## Experiment and testing 
-   1. The first test program, [runtime/test/rex_kmpapi/parallel.c](runtime/test/rex_kmpapi/parallel.c) and a simple `Makefile` located in the same folder can be used for testing the implementation of `rex_parallel/single/master/barrier` and others implemented in `rex_kmp.cpp`. Assuming the current session is in the `build` folder following the instruction above. The absolute path for your `llvm-openmp` working directory is `/home/yanyh/llvm-openmp`, so the absolute path for the current folder is `/home/yanyh/llvm-openmp/build`
+   1. The first test program, [runtime/test/rex_kmpapi/test_rex_parallel.c](runtime/test/rex_kmpapi/test_rex_parallel.c) and a simple `Makefile` located in the same folder can be used for testing the implementation of `rex_parallel/single/master/barrier` and others implemented in `rex_kmp.cpp`. Assuming the current session is in the `build` folder following the instruction above. The absolute path for your `llvm-openmp` working directory is `/home/yanyh/llvm-openmp`, so the absolute path for the current folder is `/home/yanyh/llvm-openmp/build`
    
            cd ../runtime/test/rex_kmpapi
            make # create the parallel executable
            export LD_LIBRARY_PATH=/home/yanyh/llvm-openmp/build/runtime/src:$LD_LIBRARY_PATH
-           ldd parallel  # to check whether parallel executable will use the library (libomp.so) you just built before. 
-           ./parallel
+           ldd test_rex_parallel  # to check whether parallel executable will use the library (libomp.so) you just built before. 
+           ./test_rex_parallel
    
    The `export LD_LIBRARY_PATH=...` command setups the library path for the executable by letting LD_LIBRARY_PATH environment variable to include the lib path, which is `/home/yanyh/llvm-openmp/build/runtime/src`. 
      
-   Check the `Makefile` to see how the flags are set for compiling the `parallel.c` file. If you need to use the library and the header file for your development, you need to provide the header path and lib path to the `-I` and `-L` flags of the compiler.
+   Check the `Makefile` to see how the flags are set for compiling the `test_rex_parallel.c` file. If you need to use the library and the header file for your development, you need to provide the header path and lib path to the `-I` and `-L` flags of the compiler.
      
    1. Please write other test files for other OpenMP functions
 
@@ -66,17 +66,17 @@ We will implement three sets of interfaces (API): parallel/single/master, worksh
      are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/parallel.c`](runtime/test/rex_kmpapi/parallel.c). 
      Please refer to the test file for how to use those interfaces. 
      
-  1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/rex_for.c`](runtime/test/rex_kmpapi/rex_for.c). 
+  1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/test_rex_for.c`](runtime/test/rex_kmpapi/test_rex_for.c). 
      Please program rex_for.c file first to make it compilable with the new API. For STATIC schedule, please check [`runtime/src/kmp_sched.cpp`](runtime/src/kmp_sched.cpp) file to
      see how __kmpc_for_static_init_4 is called and should be used. For DYNAMIC and GUIDED schedule, please check
      [`runtime/src/kmp_dispatch.cpp`](runtime/src/kmp_dispatch.cpp) file to see how __kmpc_dist_dispatch_init_4, __kmpc_dispatch_next_4, and __kmpc_dispatch_fini_4 should be used to make a correct call here. Check the https://www.openmprtl.org/sites/default/files/resources/libomp_20160808_manual.pdf page 12 to see how loop is transformed. 
      
-  1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/rex_fib.c`](runtime/test/rex_kmpapi/rex_fib.c). Please program rex_fib.c file first to make it compilable with the new API. Tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c and [`runtime/src/kmp_tasking.cpp`](runtime/src/kmp_tasking.cpp) files to figure out how the three __kmpc_ functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three functions to implement our rex_ related tasking interface.
+  1. Tasking API: `rex_create_task_1`, `rex_sched_task` and `rex_taskwait`. The test file is [`runtime/test/rex_kmpapi/test_rex_fib.c`](runtime/test/rex_kmpapi/test_rex_fib.c). Please program test_rex_fib.c file first to make it compilable with the new API. Tasking interface will need some reverse-engineering and studying the [runtime/test/rex_kmpapi/kmp_taskloop.c](runtime/test/rex_kmpapi/kmp_taskloop.c) and [`runtime/src/kmp_tasking.cpp`](runtime/src/kmp_tasking.cpp) files to figure out how the three __kmpc_ functions are used for tasking: __kmp_task_alloc, __kmpc_omp_task and __kmpc_omp_taskwait. We will use the three functions to implement our rex_ related tasking interface.
       
-Your testing should make sure that the test file is compiled, linked and executed correctly using your interface. The [`runtime/test/rex_kmpapi/Makefile`](runtime/test/rex_kmpapi/Makefile) target for each test file, e.g. for parallel.c has two commands: the first one is to compile your test file to make sure it uses the APIs correctly, the second one is to link with the library that provide the implementation of the APIs and the execution of the `parallel` is for verifying the correctness of your implementation. 
+Your testing should make sure that the test file is compiled, linked and executed correctly using your interface. The [`runtime/test/rex_kmpapi/Makefile`](runtime/test/rex_kmpapi/Makefile) target for each test file, e.g. for test_rex_parallel.c has two commands: the first one is to compile your test file to make sure it uses the APIs correctly, the second one is to link with the library that provide the implementation of the APIs and the execution of the `test_rex_parallel` is for verifying the correctness of your implementation. 
 
 ````
-parallel: parallel.c
+test_rex_parallel: test_rex_parallel.c
 	g++ -c $< -I../../../build/runtime/src -std=c++11
 	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 ````
