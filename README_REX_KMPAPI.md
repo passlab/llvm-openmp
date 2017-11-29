@@ -24,13 +24,16 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
            git add <changed files>
            git commit -m "<Summary of changes>"
 	  
-  1. `cmake` to create the makefile with the LIBOMP_* setting you want and `make` to build the library and the header files
+  1. `cmake` to create the makefile with the LIBOMP_* setting you want
   
            mkdir build
            cd build
-           cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on ..
-           make
-           
+           cmake -G "Unix Makefiles" -DLIBOMP_REX_KMPAPI_SUPPORT=on ..     
+	   
+  1. `make` to build the library and the header files. Each time you change runtime source code (e.g. rex_kmp.cpp, rex_kmp.h, or pull in changes from the github repo), you need to do a `make` in the `build` folder
+          
+	   make
+	  
      The `make` command will build the runtime source codes into a library, the `libomp.so` file and create the header files (`omp.h` and `rex_kmp.h`) for the library. Those files are located in `runtime/src` folder under the `build` folder you are working on. 
            
      For using other compiler (on fornax), `CC` and `CXX` should be set for `cmake`. For example, on fornax: 
