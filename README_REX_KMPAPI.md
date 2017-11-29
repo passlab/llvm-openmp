@@ -58,12 +58,10 @@ and what macros will be enabled (check [runtime/src/kmp_config.h.cmake](runtime/
      
    Check the `Makefile` to see how the flags are set for compiling the `test_rex_parallel.c` file. If you need to use the library and the header file for your development, you need to provide the header path and lib path to the `-I` and `-L` flags of the compiler.
      
-   1. Please write other test files for other OpenMP functions
-
 ## Implementation in C
 We will implement three sets of interfaces (API): parallel/single/master, worksharing and tasking. All the implementation of the interfaces should be done in [runtime/src/rex_kmp.h](runtime/src/rex_kmp.h) and [runtime/src/rex_kmp.cpp](runtime/src/rex_kmp.cpp) files. For each set of interface implemented, at least one test file should be created to experiment and debug the implementation. 
   1. parallel/single/master API: `rex_parallel`, `rex_single`, `rex_end_single`, `rex_master`, `rex_end_master` and `rex_barrier` 
-     are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/parallel.c`](runtime/test/rex_kmpapi/parallel.c). 
+     are already implemented and provided. The test file is [`runtime/test/rex_kmpapi/test_rex_parallel.c`](runtime/test/rex_kmpapi/test_rex_parallel.c). 
      Please refer to the test file for how to use those interfaces. 
      
   1. worksharing API: `rex_for`. The test file is [`runtime/test/rex_kmpapi/test_rex_for.c`](runtime/test/rex_kmpapi/test_rex_for.c). 
