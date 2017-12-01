@@ -18,7 +18,7 @@ void parallel_func(int *global_id, int num_args, int *A, int *B, int N) {
    arg.A = A;
    arg.B = B;
 	
-   rex_for(0, N, 1, -1, for_body, &arg);
+   rex_for(0, N-1, 1, 30, for_body, &arg);
 	
 }
 
@@ -26,7 +26,7 @@ int main(int argc, char * argv[])
 {
 
     int i;
-    int N = 100;
+    int N = 1000;
     int A[N];
     int B[N];
 
