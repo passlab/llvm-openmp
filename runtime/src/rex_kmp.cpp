@@ -306,64 +306,61 @@ void rex_end_single_1()
 }
 
 void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
-    int lastiter;
-    __kmpc_for_static_init_4(NULL, __kmp_get_global_thread_id(), kmp_sch_static,
-    &lastiter, &low, &up, &stride, 0, 0);
-
-#if 0
-    auto int i_7_pr;
-    auto int lower, upper, liter, incr;
-    liter = 0;
-    __kmpc_dispatch_init_4(NULL, *gtid, 35, 0, 9, 1, 1 );
-    while ( __kmpc_dispatch_next_4( & loc7, *gtid, & liter, & lower, & upper, & incr
-    ) ) {
-        for( i_7_pr = lower; upper >= i_7_pr; i_7_pr ++ )
-            for_body_1(i_7_pr, args);
-    }
-#endif
+    rex_for_sched(low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body_1, args);
 }
 
 /**
  * No need to implement
  */
 void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
+    int i;
+    int lower, upper, liter = 0, incr = 1;
+    enum sched_type sched;
+    if (chunk == REX_DEFAULT_CHUNK_SIZE) {
+        sched = kmp_sch_static;
+    } else {
+        if (sched_type == REX_SCHED_STATIC) {
+            sched = kmp_sch_static;
+        } else if (sched_type == REX_SCHED_DYNAMIC) {
+            sched = kmp_sch_dynamic_chunked;
+        } else if (sched_type == REX_SCHED_GUIDED) {
+            sched = kmp_sch_guided_chunked;
+        } else {
+            sched = kmp_sch_static;
+        }
+    }
+    fprintf(stderr, "Thread %d/%d inside rex_for, calling __kmpc_dispatch_init_4() with lastiter = %d, low = %d, up = %d, stride = %d, incr = %d, chunk = %d\n", omp_get_thread_num(), omp_get_num_threads(), liter, low, up, stride, incr, chunk);
+    __kmpc_dispatch_init_4(NULL, __kmp_get_global_thread_id(), sched, low, up, stride, chunk ); /// strid issue here
+    fprintf(stderr, "Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
+    while ( __kmpc_dispatch_next_4( NULL, __kmp_get_global_thread_id(), & liter, & low, & up, &stride) ) {
+        fprintf(stderr, "--Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
+        for( i = low; i <= up; i=i+stride )
+            for_body_1(i, args);
+    }
 #if 0
     if (sched_type == REX_SCHED_STATIC) {
         int lastiter;
 
-        __kmpc_for_static_init_4(NULL, __kmp_get_global_thread_id(), static,
+        __kmpc_for_static_init_4(NULL, __kmp_get_global_thread_id(), kmp_sch_static,
         &lastiter, &low, &upper, &stride, 0, 0);
 
-        int i;
-        for (i = low, i < upper; i++)
-            for_body_1(i, args);
-        __kmpc_for_static_fini();
-
-    } else if (sched_type == REX_SCHED_DYNAMIC) {
-        auto int i_7_pr;
-        auto int lower, upper, liter, incr;
-        liter = 0;
-        __kmpc_dispatch_init_4(NULL, *gtid, 35, 0, 9, 1, 1 );
-        while ( __kmpc_dispatch_next_4( & loc7, *gtid, & liter, & lower, & upper, & incr
-        ) ) {
-            for( i_7_pr = lower; upper >= i_7_pr; i_7_pr ++ )
-                for_body_1(i_7_pr, args);
-        }
-
-    } else if (sched_type == REX_SCHED_GUIDED) {
-
-    } else {
-        /* unsupported sched type */
     }
 #endif
 }
 
-rex_task_t * rex_create_task_1(task_func_1 * task_fun, void * arg1) {
+rex_task_t * rex_create_task_1(task_func_1 task_fun, void * arg1) {
    // task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,sizeof(void *), 0 , task_fun);
 
 }
-void * rex_sched_task(rex_task_t * t);
-void * rex_taskwait();
+void * rex_sched_task(rex_task_t * t) {
+  //  kmp_int32 __kmpc_omp_task(ident_t *loc_ref, kmp_int32 gtid, kmp_task_t *new_task)
+
+}
+void * rex_taskwait() {
+
+    kmp_int32 __kmpc_omp_taskwait(ident_t *loc_ref, kmp_int32 gtid);
+
+}
 
 // end of file //
 
