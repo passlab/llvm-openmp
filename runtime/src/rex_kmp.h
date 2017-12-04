@@ -102,7 +102,7 @@ void rex_parallel_for();
  * Rewrite the rex_fib.c example using our interface for testing our interface, you need to use rex_parallel and rex_single as well.
  */
 
-typedef void rex_task_t; /* even rex_task_t is exported as void type, internally it is kmp_task_t type so we can work around the inclusion of the kmp.h file */
+typedef struct rex_task rex_task_t;
 typedef void (*rex_task_func) (void * priv, void * shared);
 
 extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared);
