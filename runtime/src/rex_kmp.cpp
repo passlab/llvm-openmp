@@ -337,7 +337,8 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
         for( i = low; i <= up; i=i+stride )
             for_body_1(i, args);
     }
-#if 0
+    /** kmp_sched.cpp is where the runtime code for static scheduling. However, as shown above
+     * kmp_dispatch.cpp also allows for static scheduling, thus we combine them into one above
     if (sched_type == REX_SCHED_STATIC) {
         int lastiter;
 
@@ -345,21 +346,47 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
         &lastiter, &low, &upper, &stride, 0, 0);
 
     }
-#endif
+    */
 }
 
-rex_task_t * rex_create_task_1(task_func_1 task_fun, void * arg1) {
-   // task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,sizeof(void *), 0 , task_fun);
+/**
+ * a task entry function so we can wrap task func so kmp accepts it
+ * @param task_fun
+ * @param arg1
+ * @return
+ */
+static void rex_task_entry_func(int gtid, kmp_task_t * task) {
+    void * task_func_location = (void*)(task + sizeof(kmp_task_t));
+    void * task_private = task_func_location + sizeof(void*);
+    rex_task_func task_func = (rex_task_func) task_func_location;
+    (*task_func)(task_private, task->shareds);
+
+    //((void (*)(void *))(*(task->routine)))(task->shareds);
+}
+
+typedef kmp_task_t rex_task_t;
+
+rex_task_t * rex_create_task(task_func task_fun, int size_of_private, void * priv, void * shared) {
+
+    rex_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,
+                                sizeof(kmp_task_t) + size_of_private + sizeof(char*), sizeof(char*) , rex_task_entry_func);
+    task->shared = shared;
+    void * task_func_location = task + sizeof(kmp_task_t);
+    void * task_private = task_func_location + sizeof(char*);
+
+    *task_func_location = task_fun;
+
+    /* copy the private data */
+    memcpy(task_private, priv, size_of_private);
 
 }
+
 void * rex_sched_task(rex_task_t * t) {
-  //  kmp_int32 __kmpc_omp_task(ident_t *loc_ref, kmp_int32 gtid, kmp_task_t *new_task)
-
+    kmp_int32 __kmpc_omp_task(NULL, __kmp_get_global_thread_id(), t);
 }
+
 void * rex_taskwait() {
-
-    kmp_int32 __kmpc_omp_taskwait(ident_t *loc_ref, kmp_int32 gtid);
-
+    kmp_int32 __kmpc_omp_taskwait(NULL, __kmp_get_global_thread_id());
 }
 
 // end of file //

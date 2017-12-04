@@ -87,6 +87,12 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
  */
 void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
 
+
+/**
+ * rex_parallel_for is the combination of rex_parallel and rex_for
+ */
+void rex_parallel_for();
+
 /**
  * tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c
  * and runtime/src/kmp_tasking.cpp files to figure out how the three __kmpc_
@@ -97,15 +103,11 @@ void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, vo
  */
 
 typedef void rex_task_t; /* even rex_task_t is exported as void type, internally it is kmp_task_t type so we can work around the inclusion of the kmp.h file */
-typedef void (*task_func_1) (void * arg1);
-typedef void (*task_func_2) (void * arg1, void * arg2);
-typedef void (*task_func_3) (void * arg1, void * arg2, void * arg3);
+typedef void (*rex_task_func) (void * priv, void * shared);
 
-rex_task_t * rex_create_task_1(task_func_1 task_fun, void * arg1);
+extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared);
 void * rex_sched_task(rex_task_t * t);
 void * rex_taskwait();
-
-rex_task_t * rex_create_task_2(task_func_1 * task_fun, void * arg1, void * arg2);
 
 /* util */
 extern double read_timer_ms();
