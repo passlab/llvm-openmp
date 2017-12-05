@@ -354,13 +354,21 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
  * @param task_fun
  * @param arg1
  * @return
+ *
+ * The trick of passing data pointer (void *) and function pointer is by using pointer to a pointer
+
+typedef void (*FPtr)(void); // Hide the ugliness
+FPtr f = someFunc;          // Function pointer to convert
+void* ptr = *(void**)(&f);  // Data pointer
+FPtr f2 = *(FPtr*)(&ptr);   // Function pointer restored
  */
+
 static int rex_task_entry_func(int gtid, void * arg) {
     kmp_task_t * task = (kmp_task_t *) arg;
     void * task_func_location = (void*)((char*)task + sizeof(kmp_task_t));
     void * task_private = (char*)task_func_location + sizeof(void*);
-    rex_task_func task_func = (rex_task_func) task_func_location;
-    (*task_func)(task_private, task->shareds);
+    rex_task_func task_func = *(rex_task_func*) (&task_func_location);
+    task_func(task_private, task->shareds);
 
     //((void (*)(void *))(*(task->routine)))(task->shareds);
 }
@@ -368,12 +376,12 @@ static int rex_task_entry_func(int gtid, void * arg) {
 rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared) {
 
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,
-                                sizeof(kmp_task_t) + size_of_private + sizeof(char*), sizeof(char*) , rex_task_entry_func);
+                                sizeof(kmp_task_t) + size_of_private + sizeof(char*), sizeof(char*) , &rex_task_entry_func);
     task->shareds = shared;
     void * task_func_location = (char*)task + sizeof(kmp_task_t);
     void * task_private = (char*)task_func_location + sizeof(char*);
 
-    (rex_task_func) task_func_location = task_fun;
+    task_func_location = *(void**)(&task_fun);
 
     /* copy the private data */
     memcpy(task_private, priv, size_of_private);

@@ -48,9 +48,9 @@ typedef enum rex_sched_type {
 
 #define REX_DEFAULT_CHUNK_SIZE -1
 
-typedef void* (*for_body_1) (int i, void * arg1);
-typedef void* (*for_body_2) (int i, void * arg1, void * arg2);
-typedef void* (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
+typedef void (*for_body_1) (int i, void * arg1);
+typedef void (*for_body_2) (int i, void * arg1, void * arg2);
+typedef void (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
 
 /* Worksharing API */
 /**
