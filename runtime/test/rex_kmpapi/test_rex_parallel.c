@@ -61,11 +61,11 @@ int main(int argc, char *argv[])
     double times = read_timer();
     int current_thread = rex_get_global_thread_num();
     printf("========================================================\n");
-    rex_parallel(nums, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 0);
+    rex_parallel(nums, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 0);
 
     printf("========================================================\n");
     for (i=0; i<num_runs; i++) {
-        rex_parallel(nums/2, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 1);
+        rex_parallel(nums/2, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 1);
     }
     nums = rex_get_total_num_threads();
     printf("Result (%d threads): %f, current_thread: %d\n", nums, times/num_runs, current_thread);
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
     
     times = read_timer();
     printf("========================================================\n");
-    rex_parallel(nums*2, (rex_pfunc_t)hello_microtask, 2, "naked runtime", 2);
+    rex_parallel(nums*2, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 2);
     times = read_timer() - times;
 
     nums = rex_get_total_num_threads();

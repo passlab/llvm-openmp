@@ -39,6 +39,6 @@ int main(int argc, char * argv[])
     }
 */
     rex_parallel(4, (rex_pfunc_t)parallel_func, 3, A, B, N);
-	
+//    rex_parallel_for(4, 0, N-1, 1, 30, &for_body, &arg);
     return 0;
 }

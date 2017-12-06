@@ -9,7 +9,7 @@ typedef struct fib_task_args {
     int *x;
 } fib_task_args_t;
 
-void fib_task_n_1 (void * args) {
+static void fib_task_n_1 (void * args, void *shared) {
     fib_task_args_t * fibargs = (fib_task_args_t * ) args;
     *fibargs->x = fib(fibargs->n - 1);
 }
@@ -26,7 +26,7 @@ int fib(int n)
       fib_task_args_t args;
       args.n = n;
       args.x = &x;
-      rex_task_t * task = rex_create_task_1(fib_task_n_1, sizeof(fib_task_args_t), &args, NULL);
+      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL);
       rex_sched_task(task);
 
       y=fib(n-2);

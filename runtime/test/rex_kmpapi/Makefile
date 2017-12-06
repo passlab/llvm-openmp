@@ -9,7 +9,7 @@ test_rex_for: test_rex_for.c
 	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 
 test_rex_fib: test_rex_fib.c
-	g++ -c $< -I../../../build/runtime/src -std=c++11
+	g++ -c -g $< -I../../../build/runtime/src -save-temps -std=c++11
 	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 
 omp: test_omp_parallel test_omp_for test_omp_fib
