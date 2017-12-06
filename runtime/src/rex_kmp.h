@@ -73,7 +73,7 @@ typedef void (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
  *
  * Rewrite the runtime/test/rex_kmpapi/rex_for.c example to use our interface rex_parallel and rex_for
  */
-void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
+extern void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
 
 /**
  * A simpler implementation that always use dynamic schedule policy
@@ -85,13 +85,14 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
  * @param for_body_1
  * @param args
  */
-void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
-
+extern void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
 
 /**
  * rex_parallel_for is the combination of rex_parallel and rex_for
  */
-void rex_parallel_for();
+extern void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
+extern void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
+
 
 /**
  * tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c
@@ -101,13 +102,12 @@ void rex_parallel_for();
  *
  * Rewrite the rex_fib.c example using our interface for testing our interface, you need to use rex_parallel and rex_single as well.
  */
-
 typedef struct rex_task rex_task_t;
 typedef void (*rex_task_func) (void * priv, void * shared);
 
 extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared);
-void * rex_sched_task(rex_task_t * t);
-void * rex_taskwait();
+extern void * rex_sched_task(rex_task_t * t);
+extern void * rex_taskwait();
 
 /* util */
 extern double read_timer_ms();

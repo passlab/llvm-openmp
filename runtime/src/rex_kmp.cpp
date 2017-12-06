@@ -350,6 +350,21 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
 }
 
 /**
+ * rex_parallel_for related implementation
+ */
+static void rex_parallel_func_for_parallel_for(int *global_id, int num_args, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
+    rex_for_sched(low, up, stride, sched_type, chunk, for_body_1, args);
+}
+
+void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
+    rex_parallel(num_threads, (rex_pfunc_t)&rex_parallel_func_for_parallel_for, 7, low, up, stride, sched_type, chunk, for_body_1, args);
+}
+
+void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
+    rex_parallel_for_sched(num_threads, low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body_1, args);
+}
+
+/**
  * a task entry function so we can wrap task func so kmp accepts it
  * @param task_fun
  * @param arg1
@@ -365,9 +380,11 @@ FPtr f2 = *(FPtr*)(&ptr);   // Function pointer restored
 
 static int rex_task_entry_func(int gtid, void * arg) {
     kmp_task_t * task = (kmp_task_t *) arg;
-    void * task_func_location = (void*)((char*)task + sizeof(kmp_task_t));
+    void ** task_func_location = (void**)((char*)task + sizeof(kmp_task_t));
     void * task_private = (char*)task_func_location + sizeof(void*);
-    rex_task_func task_func = *(rex_task_func*) (&task_func_location);
+    rex_task_func task_func = (rex_task_func) (*task_func_location);
+
+//    fprintf(stderr, "task func when executing tasks: %X\n", task_func);
     task_func(task_private, task->shareds);
 
     //((void (*)(void *))(*(task->routine)))(task->shareds);
@@ -378,10 +395,13 @@ rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void *
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,
                                 sizeof(kmp_task_t) + size_of_private + sizeof(char*), sizeof(char*) , &rex_task_entry_func);
     task->shareds = shared;
-    void * task_func_location = (char*)task + sizeof(kmp_task_t);
+    void ** task_func_location = (void**)((char*)task + sizeof(kmp_task_t));
     void * task_private = (char*)task_func_location + sizeof(char*);
 
-    task_func_location = *(void**)(&task_fun);
+//    fprintf(stderr, "task func when creating tasks: %X stored in %X\n", task_fun, task_func_location);
+    *task_func_location = *(void**)(&task_fun);
+    /* compiler does not allow to assign a function pointer to a void * pointer, *(void**)(&task_fun) has exactly the same
+     * value as the task_fun itself, we wrote this way to cast a function pointer to a void pointer of the same value */
 
     /* copy the private data */
     memcpy(task_private, priv, size_of_private);
