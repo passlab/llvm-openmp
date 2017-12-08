@@ -105,9 +105,32 @@ extern void rex_parallel_for_sched(int num_threads, int low, int up, int stride,
 typedef struct rex_task rex_task_t;
 typedef void (*rex_task_func) (void * priv, void * shared);
 
-extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared);
+
+typedef enum rex_task_deptype {
+    REX_TASK_DEPTYPE_IN,
+    REX_TASK_DEPTYPE_OUT,
+    REX_TASK_DEPTYPE_INOUT,
+} rex_task_deptype_t;
+
+#define REX_DEFAULT_NUM_TASK_DEPS 16
+
+extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps);
+
+extern void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_deptype_t deptype);
+
 extern void * rex_sched_task(rex_task_t * t);
 extern void * rex_taskwait();
+
+/* taskgroup_begin and taskgroup_end has to be used in a pair, within one function (?) */
+extern void rex_taskgroup_begin();
+extern void rex_taskgroup_end();
+
+extern void rex_taskyield();
+
+/**
+ * TBD
+ */
+extern void rex_taskloop();
 
 /* util */
 extern double read_timer_ms();

@@ -26,7 +26,8 @@ int fib(int n)
       fib_task_args_t args;
       args.n = n;
       args.x = &x;
-      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL);
+      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL, 0);
+
       rex_sched_task(task);
 
       y=fib(n-2);

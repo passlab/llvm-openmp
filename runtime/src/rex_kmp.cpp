@@ -365,6 +365,32 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, v
 }
 
 /**
+ * The memory for a task is as follows, see the rex_create_task func
+ * ____________________________________________________
+ * |      taskdata                                    |
+ * |      kmp_task_t                                  |
+ * |      task_func                                   |
+ * |      num_deps_user_requested(int)                |
+ * |      num_deps(int)                               |
+ * |      kmp_depend_info_t[num_deps_user_requested   |
+ * |      private data area                           |
+ * ----------------------------------------------------
+ *
+ * in rex_create_task, __kmpc_omp_task_alloc is called and returned kmp_task_t. Since we use a rex_taskinfo_t data structure
+ * so the returned pointer is also the pointer to the rex_task_info_t object.
+ *
+ * So a pointer to rex_task_t, kmp_task_t and rex_taskinfo_t are the same thing.
+ */
+typedef struct rex_taskinfo {
+    kmp_task_t task;
+    rex_task_func task_func;
+    int num_deps_user_requested;
+    int num_deps;
+} rex_taskinfo_t;
+
+#define REX_GET_TASK_DEPEND_INFO_PTR(t) (kmp_depend_info_t*)((char*)t+sizeof(rex_taskinfo_t))
+
+/**
  * a task entry function so we can wrap task func so kmp accepts it
  * @param task_fun
  * @param arg1
@@ -379,41 +405,107 @@ FPtr f2 = *(FPtr*)(&ptr);   // Function pointer restored
  */
 
 static int rex_task_entry_func(int gtid, void * arg) {
-    kmp_task_t * task = (kmp_task_t *) arg;
-    void ** task_func_location = (void**)((char*)task + sizeof(kmp_task_t));
-    void * task_private = (char*)task_func_location + sizeof(void*);
-    rex_task_func task_func = (rex_task_func) (*task_func_location);
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*) arg;
+    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(arg);
+    void * task_private = (void*)&depinfo[rex_tinfo->num_deps_user_requested];
 
 //    fprintf(stderr, "task func when executing tasks: %X\n", task_func);
-    task_func(task_private, task->shareds);
+    rex_tinfo->task_func(task_private, rex_tinfo->task.shareds);
 
     //((void (*)(void *))(*(task->routine)))(task->shareds);
 }
 
-rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared) {
+/**
+ * @param task_fun
+ * @param size_of_private
+ * @param priv
+ * @param shared
+ * @return
+ */
 
-    kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(),1,
-                                sizeof(kmp_task_t) + size_of_private + sizeof(char*), sizeof(char*) , &rex_task_entry_func);
+rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps) {
+
+    kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
+                                sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + size_of_private,
+                                              sizeof(char*), &rex_task_entry_func);
     task->shareds = shared;
-    void ** task_func_location = (void**)((char*)task + sizeof(kmp_task_t));
-    void * task_private = (char*)task_func_location + sizeof(char*);
-
-//    fprintf(stderr, "task func when creating tasks: %X stored in %X\n", task_fun, task_func_location);
-    *task_func_location = *(void**)(&task_fun);
-    /* compiler does not allow to assign a function pointer to a void * pointer, *(void**)(&task_fun) has exactly the same
-     * value as the task_fun itself, we wrote this way to cast a function pointer to a void pointer of the same value */
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
+    rex_tinfo->task_func = task_fun;
+    rex_tinfo->num_deps_user_requested = num_deps;
+    rex_tinfo->num_deps = 0;
+    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
+    void * task_private = (void*)&depinfo[num_deps];
 
     /* copy the private data */
     memcpy(task_private, priv, size_of_private);
     return (rex_task_t *) task;
 }
 
+/**
+ * to add a dependency to a task before sched_task
+ * @param t
+ * @param base
+ * @param length
+ * @param deptype
+ *
+ * This is definitely not thread safe, no need to be
+ */
+void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_deptype_t deptype) {
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)t;
+    int num_deps = rex_tinfo->num_deps;
+    if (num_deps == rex_tinfo->num_deps_user_requested) {
+        return; /* TODO, return some warning that they want to add more dependencies than they originalled asked for */
+    }
+    kmp_depend_info_t * depend_info = &(REX_GET_TASK_DEPEND_INFO_PTR(t))[num_deps];
+    depend_info->base_addr = (kmp_intptr_t)base;
+    depend_info->len = length;
+    if (deptype == REX_TASK_DEPTYPE_IN) {
+        depend_info->flags.in = 1;
+    }
+    if (deptype == REX_TASK_DEPTYPE_OUT) {
+        depend_info->flags.out = 1;
+    }
+    if (deptype == REX_TASK_DEPTYPE_INOUT) {
+        depend_info->flags.in = 1;
+        depend_info->flags.out = 1;
+    }
+    rex_tinfo->num_deps++;
+}
+
+/**
+ * schedule a task for execution
+ * @param t
+ * @return
+ */
 void * rex_sched_task(rex_task_t * t) {
-    __kmpc_omp_task(NULL, __kmp_get_global_thread_id(), (kmp_task_t*)t);
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)t;
+    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(t);
+    int gtid = __kmp_get_global_thread_id();
+    if (rex_tinfo->num_deps > 0)
+        __kmpc_omp_task_with_deps(NULL, gtid, (kmp_task_t*)t, rex_tinfo->num_deps, depinfo, 0, NULL);
+    else
+        __kmpc_omp_task(NULL, gtid, (kmp_task_t*)t);
+
+    /* it is ok to schedule a task with no dependency using __kmpc_omp_task_with_deps with 0 dependency
+     * So the following call is actually enough for the above if-else code seg
+    __kmpc_omp_task_with_deps(NULL, gtid, (kmp_task_t*)t, rex_tinfo->num_deps, depinfo, 0, NULL);
+     */
 }
 
 void * rex_taskwait() {
     __kmpc_omp_taskwait(NULL, __kmp_get_global_thread_id());
+}
+
+void rex_taskgroup_begin() {
+    __kmpc_taskgroup(NULL, __kmp_get_global_thread_id());
+}
+
+void rex_taskgroup_end() {
+    __kmpc_taskgroup(NULL, __kmp_get_global_thread_id());
+}
+
+void rex_taskyield() {
+    __kmpc_omp_taskyield(NULL, __kmp_get_global_thread_id(), 0);
 }
 
 // end of file //
