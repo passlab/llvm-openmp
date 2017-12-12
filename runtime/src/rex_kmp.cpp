@@ -422,7 +422,6 @@ static int rex_task_entry_func(int gtid, void * arg) {
  * @param shared
  * @return
  */
-
 rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps) {
 
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
@@ -477,7 +476,7 @@ void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_d
  * @param t
  * @return
  */
-void * rex_sched_task(rex_task_t * t) {
+void rex_sched_task(rex_task_t * t) {
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)t;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(t);
     int gtid = __kmp_get_global_thread_id();
@@ -492,7 +491,19 @@ void * rex_sched_task(rex_task_t * t) {
      */
 }
 
-void * rex_taskwait() {
+/**
+ * create a task and give it to runtime execution.
+ * @param task_fun
+ * @param size_of_private
+ * @param priv
+ * @param shared
+ */
+void rex_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared) {
+    rex_task_t * t = rex_create_task(task_fun, size_of_private, priv, shared, 0);
+    rex_sched_task(t);
+}
+
+void rex_taskwait() {
     __kmpc_omp_taskwait(NULL, __kmp_get_global_thread_id());
 }
 
