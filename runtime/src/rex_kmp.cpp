@@ -460,8 +460,10 @@ void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_d
     depend_info->len = length;
     if (deptype == REX_TASK_DEPTYPE_IN) {
         depend_info->flags.in = 1;
+        depend_info->flags.out = 0;
     }
     if (deptype == REX_TASK_DEPTYPE_OUT) {
+        depend_info->flags.in = 1; /* out = inout as implied by the spec and expected by the runtime */
         depend_info->flags.out = 1;
     }
     if (deptype == REX_TASK_DEPTYPE_INOUT) {
