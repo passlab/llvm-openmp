@@ -4,18 +4,23 @@
 int fib(int n)
 {
   int x, y;
+  int result;
   if (n<2)
     return n;
   else
     {
-       #pragma omp task shared(x) firstprivate(n)
+       #pragma omp task shared(x) firstprivate(n) depend(out:x)
        x=fib(n-1);
 
-       #pragma omp task shared(y) firstprivate(n)
+       #pragma omp task shared(y) firstprivate(n) depend(out:y)
        y=fib(n-2);
 
+       #pragma omp task shared(x, y, result) depend(in:x, y)
+       result = x+y;
+
        #pragma omp taskwait
-       return x+y;
+
+       return result;
     }
 }
 
