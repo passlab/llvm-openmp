@@ -334,13 +334,11 @@ static void __kmp_stg_parse_size(char const *name, char const *value,
   }
 } // __kmp_stg_parse_size
 
-#if KMP_AFFINITY_SUPPORTED
 static void __kmp_stg_parse_str(char const *name, char const *value,
-                                char const **out) {
+                                char **out) {
   __kmp_str_free(out);
   *out = __kmp_str_format("%s", value);
 } // __kmp_stg_parse_str
-#endif
 
 static void __kmp_stg_parse_int(
     char const
@@ -2086,6 +2084,11 @@ static void __kmp_parse_affinity_env(char const *name, char const *value,
       } else if (__kmp_match_str("core", buf, CCAST(const char **, &next))) {
         set_gran(affinity_gran_core, -1);
         buf = next;
+#if KMP_USE_HWLOC
+      } else if (__kmp_match_str("tile", buf, CCAST(const char **, &next))) {
+        set_gran(affinity_gran_tile, -1);
+        buf = next;
+#endif
       } else if (__kmp_match_str("package", buf, CCAST(const char **, &next))) {
         set_gran(affinity_gran_package, -1);
         buf = next;
@@ -2182,7 +2185,7 @@ static void __kmp_parse_affinity_env(char const *name, char const *value,
 #undef set_respect
 #undef set_granularity
 
-  __kmp_str_free(CCAST(const char **, &buffer));
+  __kmp_str_free(&buffer);
 
   if (proclist) {
     if (!type) {
@@ -2726,6 +2729,14 @@ static void __kmp_stg_parse_places(char const *name, char const *value,
     __kmp_affinity_gran = affinity_gran_core;
     __kmp_affinity_dups = FALSE;
     kind = "\"cores\"";
+#if KMP_USE_HWLOC
+  } else if (__kmp_match_str("tiles", scan, &next)) {
+    scan = next;
+    __kmp_affinity_type = affinity_compact;
+    __kmp_affinity_gran = affinity_gran_tile;
+    __kmp_affinity_dups = FALSE;
+    kind = "\"tiles\"";
+#endif
   } else if (__kmp_match_str("sockets", scan, &next)) {
     scan = next;
     __kmp_affinity_type = affinity_compact;
@@ -2823,6 +2834,14 @@ static void __kmp_stg_print_places(kmp_str_buf_t *buffer, char const *name,
       } else {
         __kmp_str_buf_print(buffer, "='cores'\n");
       }
+#if KMP_USE_HWLOC
+    } else if (__kmp_affinity_gran == affinity_gran_tile) {
+      if (num > 0) {
+        __kmp_str_buf_print(buffer, "='tiles(%d)' \n", num);
+      } else {
+        __kmp_str_buf_print(buffer, "='tiles'\n");
+      }
+#endif
     } else if (__kmp_affinity_gran == affinity_gran_package) {
       if (num > 0) {
         __kmp_str_buf_print(buffer, "='sockets(%d)'\n", num);
@@ -2876,6 +2895,11 @@ static void __kmp_stg_parse_topology_method(char const *name, char const *value,
   if (__kmp_str_match("all", 1, value)) {
     __kmp_affinity_top_method = affinity_top_method_all;
   }
+#if KMP_USE_HWLOC
+  else if (__kmp_str_match("hwloc", 1, value)) {
+    __kmp_affinity_top_method = affinity_top_method_hwloc;
+  }
+#endif
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
   else if (__kmp_str_match("x2apic id", 9, value) ||
            __kmp_str_match("x2apic_id", 9, value) ||
@@ -2936,13 +2960,7 @@ static void __kmp_stg_parse_topology_method(char const *name, char const *value,
 #endif /* KMP_GROUP_AFFINITY */
   else if (__kmp_str_match("flat", 1, value)) {
     __kmp_affinity_top_method = affinity_top_method_flat;
-  }
-#if KMP_USE_HWLOC
-  else if (__kmp_str_match("hwloc", 1, value)) {
-    __kmp_affinity_top_method = affinity_top_method_hwloc;
-  }
-#endif
-  else {
+  } else {
     KMP_WARNING(StgInvalidValue, name, value);
   }
 } // __kmp_stg_parse_topology_method
@@ -3300,15 +3318,15 @@ static void __kmp_stg_parse_schedule(char const *name, char const *value,
     if (length > INT_MAX) {
       KMP_WARNING(LongValue, name);
     } else {
-      char *semicolon;
+      const char *semicolon;
       if (value[length - 1] == '"' || value[length - 1] == '\'')
         KMP_WARNING(UnbalancedQuotes, name);
       do {
         char sentinel;
 
-        semicolon = CCAST(char *, strchr(value, ';'));
+        semicolon = strchr(value, ';');
         if (*value && semicolon != value) {
-          char *comma = CCAST(char *, strchr(value, ','));
+          const char *comma = strchr(value, ',');
 
           if (comma) {
             ++comma;
@@ -3373,7 +3391,7 @@ static void __kmp_stg_parse_omp_schedule(char const *name, char const *value,
   if (value) {
     length = KMP_STRLEN(value);
     if (length) {
-      char *comma = CCAST(char *, strchr(value, ','));
+      const char *comma = strchr(value, ',');
       if (value[length - 1] == '"' || value[length - 1] == '\'')
         KMP_WARNING(UnbalancedQuotes, name);
       /* get the specified scheduling style */
@@ -4354,7 +4372,31 @@ static void __kmp_stg_print_omp_cancellation(kmp_str_buf_t *buffer,
 
 #endif
 
-// -----------------------------------------------------------------------------
+#if OMP_50_ENABLED && OMPT_SUPPORT
+
+static char *__kmp_tool_libraries = NULL;
+
+static void __kmp_stg_parse_omp_tool_libraries(char const *name,
+                                               char const *value, void *data) {
+  __kmp_stg_parse_str(name, value, &__kmp_tool_libraries);
+} // __kmp_stg_parse_omp_tool_libraries
+
+static void __kmp_stg_print_omp_tool_libraries(kmp_str_buf_t *buffer,
+                                               char const *name, void *data) {
+  if (__kmp_tool_libraries)
+    __kmp_stg_print_str(buffer, name, __kmp_tool_libraries);
+  else {
+    if (__kmp_env_format) {
+      KMP_STR_BUF_PRINT_NAME;
+    } else {
+      __kmp_str_buf_print(buffer, "   %s", name);
+    }
+    __kmp_str_buf_print(buffer, ": %s\n", KMP_I18N_STR(NotDefined));
+  }
+} // __kmp_stg_print_omp_tool_libraries
+
+#endif
+
 // Table.
 
 static kmp_setting_t __kmp_stg_table[] = {
@@ -4598,6 +4640,12 @@ static kmp_setting_t __kmp_stg_table[] = {
     {"OMP_CANCELLATION", __kmp_stg_parse_omp_cancellation,
      __kmp_stg_print_omp_cancellation, NULL, 0, 0},
 #endif
+
+#if OMP_50_ENABLED && OMPT_SUPPORT
+    {"OMP_TOOL_LIBRARIES", __kmp_stg_parse_omp_tool_libraries,
+     __kmp_stg_print_omp_tool_libraries, NULL, 0, 0},
+#endif
+
     {"", NULL, NULL, NULL, 0, 0}}; // settings
 
 static int const __kmp_stg_count =
@@ -5194,6 +5242,9 @@ void __kmp_env_initialize(char const *string) {
               break;
             case affinity_gran_node:
               str = "node";
+              break;
+            case affinity_gran_tile:
+              str = "tile";
               break;
             default:
               KMP_DEBUG_ASSERT(0);
