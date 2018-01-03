@@ -365,27 +365,27 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, v
 }
 
 /**
- * The memory for a task is as follows, see the rex_create_task func
+ * The memory for a task is as follows, see the rex_create_task func and the __kmpc_omp_task_alloc function.
  * ____________________________________________________
- * |      taskdata                                    |
- * |      kmp_task_t                                  |
- * |      task_func                                   |
- * |      num_deps_user_requested(int)                |
- * |      num_deps(int)                               |
- * |      kmp_depend_info_t[num_deps_user_requested   |
+ * |      kmp_taskdata_t                              |
+ * |  |---kmp_task_t                                  |
+ * |  |   task_func                                   |
+ * |  |   num_deps_user_requested(int)                |
+ * |  |---num_deps(int)                               |
+ * |      kmp_depend_info_t[num_deps_user_requested]  |
  * |      private data area                           |
  * ----------------------------------------------------
  *
  * in rex_create_task, __kmpc_omp_task_alloc is called and returned kmp_task_t. Since we use a rex_taskinfo_t data structure
- * so the returned pointer is also the pointer to the rex_task_info_t object.
+ * so the returned pointer is also the pointer to the rex_taskinfo_t object.
  *
- * So a pointer to rex_task_t, kmp_task_t and rex_taskinfo_t are the same thing.
+ * So a pointer to rex_task_t, kmp_task_t and rex_taskinfo_t are the same.
  */
 typedef struct rex_taskinfo {
     kmp_task_t task;
     rex_task_func task_func;
-    int num_deps_user_requested;
-    int num_deps;
+    int max_num_deps; /* the number of dependencies set when calling rex_create_task, i.e. max # of deps */
+    int num_deps; /* the number of dependencies later on when rex_task_add_dependency is called for the actual added */
 } rex_taskinfo_t;
 
 #define REX_GET_TASK_DEPEND_INFO_PTR(t) (kmp_depend_info_t*)((char*)t+sizeof(rex_taskinfo_t))
@@ -416,21 +416,27 @@ static int rex_task_entry_func(int gtid, void * arg) {
 }
 
 /**
- * @param task_fun
- * @param size_of_private
- * @param priv
- * @param shared
+ * create a task object, but not schedule it.
+ *
+ * Due to the way kmp stores a task, this function calls __kmpc_omp_task_alloc for allocating all the memory for the
+ * task, see above the note about the memory for a task.
+ *
+ * @param task_fun: the task function that take a pointer to the private data and a pointer to the shared data
+ * @param size_of_private: the size of private data
+ * @param priv: the pointer of the private data. private data will be copied to the staging memory area of the task
+ * @param shared: the pointer of the shared data, only the pointer
  * @return
  */
 rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps) {
 
+    /* kmpc_omp_task_alloc allocates kmp_taskdata_t and the rest */
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
                                 sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + size_of_private,
                                               sizeof(char*), &rex_task_entry_func);
     task->shareds = shared;
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
     rex_tinfo->task_func = task_fun;
-    rex_tinfo->num_deps_user_requested = num_deps;
+    rex_tinfo->max_num_deps = num_deps;
     rex_tinfo->num_deps = 0;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
     void * task_private = (void*)&depinfo[num_deps];
@@ -441,7 +447,8 @@ rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void *
 }
 
 /**
- * to add a dependency to a task before sched_task
+ * to add a dependency to a task before sched_task. This call can only be called in between rex_create_task and
+ * rex_sched_task
  * @param t
  * @param base
  * @param length
@@ -452,7 +459,7 @@ rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void *
 void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_deptype_t deptype) {
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)t;
     int num_deps = rex_tinfo->num_deps;
-    if (num_deps == rex_tinfo->num_deps_user_requested) {
+    if (num_deps == rex_tinfo->max_num_deps) {
         return; /* TODO, return some warning that they want to add more dependencies than they originalled asked for */
     }
     kmp_depend_info_t * depend_info = &(REX_GET_TASK_DEPEND_INFO_PTR(t))[num_deps];
