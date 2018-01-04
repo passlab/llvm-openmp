@@ -491,7 +491,7 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk,
  * |  |   max_num_deps(int)                           |
  * |  |---num_deps(int)                               |
  * |      kmp_depend_info_t[num_deps_user_requested]  |
- * |      argv                                        |
+ * |      argv[argc]                                  |
  * |      data (optioal)                              |
  * ----------------------------------------------------
  *
