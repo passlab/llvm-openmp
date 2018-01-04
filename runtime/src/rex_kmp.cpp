@@ -134,105 +134,30 @@ void rex_set_num_threads(int num_threads )
     __kmp_push_num_threads( NULL, global_tid, num_threads );
 }
 
-/** similar to __kmpc_fork_call
- * TODO: if __kmpc_fork_call is changed, we may need to change this accordingly
- * @param loc
- * @param gtid
- * @param argc
- * @param microtask
- * @param ap
+/**
+ * rex_parallel is implemented as a wrapper of __kmpc_fork_call, but we restricted that the
+ * microtask (parallel_func) must be defined with 5 parameters as follows:
+
+ void parallel_func(int *global_tid, int* tid, void *arg1, void *arg2, void * arg3)
+ *
+ * This restriction for # and type of the parameters comes from the kmpc_micro definition
+ * typedef void (*kmpc_micro)(kmp_int32 *global_tid, kmp_int32 *bound_tid, ...);
+ *
+ * So other than the first two parameters of the kmpc_micro, we further restricted the varadic (...) to be 3 in
+ * order to simplify the implementation and in most cases, 3 users arguments are sufficient. If a user want to pass
+ * more than 3 arguments to a function, she has to box it, as ususally done for passing multiple arguments to
+ * function such as pthread_create
+ *
+ * @param num_threads
+ * @param func: must be of void parallel_func(int *global_tid, int* tid, void *arg1, void *arg2, void * arg3)
+ * @param arg1
+ * @param arg2
+ * @param arg3
  */
-static void __rex_to_kmp_fork_call(ident_t *loc, int gtid, kmp_int32 argc, kmpc_micro microtask,
-#if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
-        va_list   * ap
-#else
-                                 va_list     ap
-#endif
-) {
-#if (KMP_STATS_ENABLED)
-    int inParallel = __kmpc_in_parallel(loc);
-  if (inParallel)
-  {
-      KMP_COUNT_BLOCK(OMP_NESTED_PARALLEL);
-  }
-  else
-  {
-      KMP_COUNT_BLOCK(OMP_PARALLEL);
-  }
-#endif
-
-    // maybe to save thr_state is enough here
-    {
-#if OMPT_SUPPORT
-        ompt_frame_t* ompt_frame;
-    if (ompt_enabled) {
-       kmp_info_t *master_th = __kmp_threads[ gtid ];
-       kmp_team_t *parent_team = master_th->th.th_team;
-       ompt_lw_taskteam_t *lwt = parent_team->t.ompt_serialized_team_info;
-       if (lwt)
-         ompt_frame = &(lwt->ompt_task_info.frame);
-       else
-       {
-         int tid = __kmp_tid_from_gtid( gtid );
-         ompt_frame = &(parent_team->t.t_implicit_task_taskdata[tid].
-         ompt_task_info.frame);
-       }
-       ompt_frame->reenter_runtime_frame = __builtin_frame_address(1);
-    }
-#endif
-
-#if INCLUDE_SSC_MARKS
-        SSC_MARK_FORKING();
-#endif
-        __kmp_fork_call( loc, gtid, fork_context_intel,
-                         argc,
-#if OMPT_SUPPORT
-                VOLATILE_CAST(void *) microtask,      // "unwrapped" task
-#endif
-                         VOLATILE_CAST(microtask_t) microtask, // "wrapped" task
-                         VOLATILE_CAST(launch_t)    __kmp_invoke_task_func,
-                         ap
-        );
-#if INCLUDE_SSC_MARKS
-        SSC_MARK_JOINING();
-#endif
-        __kmp_join_call( loc, gtid
-#if OMPT_SUPPORT
-                , fork_context_intel
-#endif
-        );
-    }
-}
-
-void rex_parallel(int num_threads, rex_pfunc_t func, int num_args, ...)
-{
+void rex_parallel(int num_threads, rex_pfunc_t func, void * arg1, void * arg2, void * arg3) {
     int current_thread = __kmpc_global_thread_num(NULL);
     __kmpc_push_num_threads(NULL, current_thread, num_threads );
-    va_list ap;
-    va_start(ap, num_args);
-    __rex_to_kmp_fork_call(NULL, current_thread, num_args, func,
-#if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
-            &ap
-#else
-            ap
-#endif
-    );
-    va_end(ap);
-}
-
-void rex_parallel_1(rex_pfunc_t func, int num_args, ...)
-{
-    int current_thread = __kmpc_global_thread_num(NULL);
-    va_list ap;
-    va_start(ap, num_args);
-    __rex_to_kmp_fork_call(NULL, current_thread, num_args, func,
-#if (KMP_ARCH_X86_64 || KMP_ARCH_ARM || KMP_ARCH_AARCH64) && KMP_OS_LINUX
-            &ap
-#else
-                           ap
-#endif
-    );
-    va_end(ap);
+    __kmpc_fork_call(NULL, 3, (kmpc_micro)func, arg1, arg2, arg3);
 }
 
 void rex_barrier(int gtid)
@@ -305,14 +230,29 @@ void rex_end_single_1()
     __kmpc_end_single(NULL, __kmp_get_gtid());
 }
 
-void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
-    rex_for_sched(low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body_1, args);
-}
 
 /**
- * No need to implement
+ * This function minics "omp for" construct within a parallel region. Thus this function can only be called inside a
+ * parallel_func(int *global_tid, int* tid, void *arg1, void *arg2, void * arg3) which is passed to rex_parallel
+ *
+ * So by using rex_parallel and rex_for_sched with the provided parallel_func and for_body function, we can create
+ * OpenMP styple "omp parallel" and "omp for" nested worksharing
+ *
+ * typedef void (*for_body) (int i, void * arg1, void * arg2, void * arg3) is the function that enclose the body of
+ * a parallel loop, and we restrict exactly three arguments for the function.
+ *
+ * @param low
+ * @param up
+ * @param stride
+ * @param sched_type
+ * @param chunk
+ * @param for_body
+ * @param arg1
+ * @param arg2
+ * @param arg3
  */
-void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
+void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk,
+                   rex_for_body_t for_body, void *arg1, void * arg2, void *arg3) {
     int i;
     int lower, upper, liter = 0, incr = 1;
     enum sched_type sched;
@@ -329,13 +269,13 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
             sched = kmp_sch_static;
         }
     }
-    fprintf(stderr, "Thread %d/%d inside rex_for, calling __kmpc_dispatch_init_4() with lastiter = %d, low = %d, up = %d, stride = %d, incr = %d, chunk = %d\n", omp_get_thread_num(), omp_get_num_threads(), liter, low, up, stride, incr, chunk);
+    //fprintf(stderr, "Thread %d/%d inside rex_for, calling __kmpc_dispatch_init_4() with lastiter = %d, low = %d, up = %d, stride = %d, incr = %d, chunk = %d\n", omp_get_thread_num(), omp_get_num_threads(), liter, low, up, stride, incr, chunk);
     __kmpc_dispatch_init_4(NULL, __kmp_get_global_thread_id(), sched, low, up, stride, chunk ); /// strid issue here
-    fprintf(stderr, "Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
+    //fprintf(stderr, "Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
     while ( __kmpc_dispatch_next_4( NULL, __kmp_get_global_thread_id(), & liter, & low, & up, &stride) ) {
-        fprintf(stderr, "--Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
+        //fprintf(stderr, "--Thread %d/%d inside rex_for, going inside for loop with parameters low = %d, up = %d, stride = %d, lastiter = %d\n", omp_get_thread_num(), omp_get_num_threads(), low, up, stride, liter);
         for( i = low; i <= up; i=i+stride )
-            for_body_1(i, args);
+            for_body(i, arg1, arg2, arg3);
     }
     /** kmp_sched.cpp is where the runtime code for static scheduling. However, as shown above
      * kmp_dispatch.cpp also allows for static scheduling, thus we combine them into one above
@@ -350,18 +290,69 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
 }
 
 /**
- * rex_parallel_for related implementation
+ * simple rex_for that minics "omp for" with default clause and sched type
+ * @param low
+ * @param up
+ * @param stride
+ * @param chunk
+ * @param for_body
+ * @param arg1
+ * @param arg2
+ * @param arg3
  */
-static void rex_parallel_func_for_parallel_for(int *global_id, int num_args, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
-    rex_for_sched(low, up, stride, sched_type, chunk, for_body_1, args);
+void rex_for(int low, int up, int stride, int chunk, rex_for_body_t for_body, void *arg1, void * arg2, void *arg3) {
+    rex_for_sched(low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body, arg1, arg2, arg3);
 }
 
-void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args) {
-    rex_parallel(num_threads, (rex_pfunc_t)&rex_parallel_func_for_parallel_for, 7, low, up, stride, sched_type, chunk, for_body_1, args);
+/**
+ * For "omp parallel for", the implementation does not use rex_parallel and rex_for_sched directly. Instead, we created
+ * rex_parallel_func_for_parallel_for to do that.
+ *
+ * @param global_id
+ * @param tid
+ * @param low
+ * @param up
+ * @param stride
+ * @param sched_type
+ * @param chunk
+ * @param for_body
+ * @param arg1
+ * @param arg2
+ * @param arg3
+ */
+static void rex_parallel_func_for_parallel_for(int *global_id, int * tid, int low, int up, int stride,
+                                      rex_sched_type_t sched_type, int chunk,
+                                      rex_for_body_t for_body, void *arg1, void * arg2, void * arg3) {
+    rex_for_sched(low, up, stride, sched_type, chunk, for_body, arg1, arg2, arg3);
 }
 
-void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args) {
-    rex_parallel_for_sched(num_threads, low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body_1, args);
+/**
+ * This function minics "omp parallel for" with provided sched_type and chunk
+ * @param num_threads
+ * @param low
+ * @param up
+ * @param stride
+ * @param sched_type
+ * @param chunk
+ * @param for_body
+ * @param arg1
+ * @param arg2
+ * @param arg3
+ */
+void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk,
+                            rex_for_body_t for_body, void *arg1, void *arg2, void * arg3) {
+    int current_thread = __kmpc_global_thread_num(NULL);
+    __kmpc_push_num_threads(NULL, current_thread, num_threads );
+    __kmpc_fork_call(NULL, 9, (kmpc_micro)rex_parallel_func_for_parallel_for, low, up, stride,
+                     sched_type, chunk, for_body, arg1, arg2, arg3);
+}
+
+/**
+ * The simple form of rex_parallel_for_sched
+ */
+void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk,
+                      rex_for_body_t for_body, void *arg1, void *arg2, void * arg3) {
+    rex_parallel_for_sched(num_threads, low, up, stride, REX_SCHED_DYNAMIC, chunk, for_body, arg1, arg2, arg3);
 }
 
 /**
@@ -383,7 +374,10 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, v
  */
 typedef struct rex_taskinfo {
     kmp_task_t task;
-    rex_task_func task_func;
+    union {
+        rex_task_func_t func;
+        rex_task_func_args_t func_args;
+    } task_func;
     int max_num_deps; /* the number of dependencies set when calling rex_create_task, i.e. max # of deps */
     int num_deps; /* the number of dependencies later on when rex_task_add_dependency is called for the actual added */
 } rex_taskinfo_t;
@@ -407,12 +401,21 @@ FPtr f2 = *(FPtr*)(&ptr);   // Function pointer restored
 static int rex_task_entry_func(int gtid, void * arg) {
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*) arg;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(arg);
-    void * task_private = (void*)&depinfo[rex_tinfo->num_deps_user_requested];
+    void * task_private = (void*)&depinfo[rex_tinfo->max_num_deps];
 
 //    fprintf(stderr, "task func when executing tasks: %X\n", task_func);
-    rex_tinfo->task_func(task_private, rex_tinfo->task.shareds);
+    rex_tinfo->task_func.func(task_private, rex_tinfo->task.shareds);
 
     //((void (*)(void *))(*(task->routine)))(task->shareds);
+}
+
+static int rex_task_entry_func_args(int gtid, void * arg) {
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*) arg;
+    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(arg);
+    void ** task_private = (void**)&depinfo[rex_tinfo->max_num_deps];
+
+ //   fprintf(stderr, "task func when executing tasks: %X, n: %d, &x: %p\n", rex_tinfo->task_func.func_args, task_private[0], task_private[1]);
+    rex_tinfo->task_func.func_args(task_private[0], task_private[1], task_private[2]);
 }
 
 /**
@@ -427,15 +430,15 @@ static int rex_task_entry_func(int gtid, void * arg) {
  * @param shared: the pointer of the shared data, only the pointer
  * @return
  */
-rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps) {
+rex_task_t * rex_create_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared, int num_deps) {
 
     /* kmpc_omp_task_alloc allocates kmp_taskdata_t and the rest */
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
                                 sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + size_of_private,
-                                              sizeof(char*), &rex_task_entry_func);
+                                              sizeof(void*), &rex_task_entry_func);
     task->shareds = shared;
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
-    rex_tinfo->task_func = task_fun;
+    rex_tinfo->task_func.func = task_func;
     rex_tinfo->max_num_deps = num_deps;
     rex_tinfo->num_deps = 0;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
@@ -443,6 +446,36 @@ rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void *
 
     /* copy the private data */
     memcpy(task_private, priv, size_of_private);
+    return (rex_task_t *) task;
+}
+
+/**
+ * create a task with three arguments. The three arguments are copied to the private data area of the task
+ * @param task_fun
+ * @param arg1
+ * @param arg2
+ * @param arg3
+ * @param num_deps
+ * @return
+ */
+rex_task_t * rex_create_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3, int num_deps) {
+    /* kmpc_omp_task_alloc allocates kmp_taskdata_t and the rest */
+    kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
+                                              sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + sizeof(void*)*3,
+                                              0, &rex_task_entry_func_args);
+    task->shareds = NULL;
+    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
+    rex_tinfo->task_func.func_args = task_func;
+    rex_tinfo->max_num_deps = num_deps;
+    rex_tinfo->num_deps = 0;
+    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
+    void ** task_private = (void**)&depinfo[num_deps];
+    /* copy the private data */
+    task_private[0] = arg1;
+    task_private[1] = arg2;
+    task_private[2] = arg3;
+//    fprintf(stderr, "Creating tasks: %X, n: %d, &x: %p\n", task_func, arg1, arg2);
+
     return (rex_task_t *) task;
 }
 
@@ -501,14 +534,27 @@ void rex_sched_task(rex_task_t * t) {
 }
 
 /**
- * create a task and give it to runtime execution.
+ * create a task and give it to runtime for execution.
  * @param task_fun
  * @param size_of_private
  * @param priv
  * @param shared
  */
-void rex_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared) {
-    rex_task_t * t = rex_create_task(task_fun, size_of_private, priv, shared, 0);
+void rex_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared) {
+    rex_task_t * t = rex_create_task(task_func, size_of_private, priv, shared, 0);
+    rex_sched_task(t);
+}
+
+/**
+ * create a task with three arguments and give it to runtime for execution. The three arguments are copied to the
+ * private data area of the task first
+ * @param task_fun
+ * @param arg1
+ * @param arg2
+ * @param arg3
+ */
+void rex_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3) {
+    rex_task_t * t = rex_create_task_args(task_func, arg1, arg2, arg3, 0);
     rex_sched_task(t);
 }
 

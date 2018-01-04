@@ -2,24 +2,14 @@
 #include <omp.h>
 #include "rex_kmp.h"
 
-typedef struct for_body_arg_t {
-	int * A;
-	int * B;
-} for_body_arg_t;
-
-void for_body(int i, void * varg) {
-    for_body_arg_t* arg = (for_body_arg_t*)varg;
-    arg->A[i] = arg->A[i] + 3.14 * arg->B[i];
+void for_body(int i, void * arg1, void * arg2, void * arg3) {
+    int *A = (int*) arg1;
+    int *B = (int*) arg2;
+    A[i] = A[i] + 3.14 * B[i];
 }
 
-void parallel_func(int *global_id, int num_args, int *A, int *B, int N) {
-	
-   for_body_arg_t arg;
-   arg.A = A;
-   arg.B = B;
-	
-   rex_for(0, N-1, 1, 30, &for_body, &arg);
-	
+void parallel_func(int *global_id, int *tid, int *A, int *B, int N) {
+   rex_for(0, N-1, 1, 30, &for_body, (void*)A, (void*)B, (void*)N);
 }
 
 int main(int argc, char * argv[])
@@ -38,7 +28,7 @@ int main(int argc, char * argv[])
 	A[i] = A[i] + 3.14 * B[i];
     }
 */
-    rex_parallel(4, (rex_pfunc_t)parallel_func, 3, A, B, N);
-//    rex_parallel_for(4, 0, N-1, 1, 30, &for_body, &arg);
+    rex_parallel(4, (rex_pfunc_t)parallel_func, A, B, (void*)N);
+    rex_parallel_for(4, 0, N-1, 1, 30, &for_body, A, B, (void*)N);
     return 0;
 }

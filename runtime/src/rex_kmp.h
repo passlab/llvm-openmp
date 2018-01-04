@@ -20,9 +20,8 @@ extern int rex_get_num_threads_in_team();
 extern int rex_in_parallel( );
 extern void rex_set_num_threads(int num_threads );
 
-typedef void (*rex_pfunc_t)    (int * global_tid, int * num_args, ... );
-extern void rex_parallel(int num_threads, rex_pfunc_t func, int num_shared, ...);
-extern void rex_parallel_1(rex_pfunc_t func, int num_shared, ...);
+typedef void (*rex_pfunc_t)    (int *global_tid, int * tid, void * arg1, void * arg2, void * arg3);
+extern void rex_parallel(int num_threads, rex_pfunc_t func, void * arg1, void * arg2, void * arg3);
 
 extern void rex_barrier(int gtid);
 extern void rex_barrier_1();
@@ -39,31 +38,8 @@ extern int rex_single_1();
 extern void rex_end_single(int gtid);
 extern void rex_end_single_1();
 
-/* for worksharing */
-typedef enum rex_sched_type {
-    REX_SCHED_STATIC,
-    REX_SCHED_DYNAMIC,
-    REX_SCHED_GUIDED,
-} rex_sched_type_t;
-
-#define REX_DEFAULT_CHUNK_SIZE -1
-
-typedef void (*for_body_1) (int i, void * arg1);
-typedef void (*for_body_2) (int i, void * arg1, void * arg2);
-typedef void (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
-
 /* Worksharing API */
 /**
- * called within a parallel function
- * @param low
- * @param up
- * @param stride
- * @param sched_type: make sure you find the mapping of our definition of sched_type to kmp's enum definition of sched_type
- *                    in kmp.h:313
- * @param chunk
- * @param for_body_1
- * @param args
- *
  * For STATIC schedule, please check kmp_sched.cpp file to see how __kmpc_for_static_init_4 is called and should be used
  *
  * For DYNAMIC and GUIDED schedule, please check kmp_dispatch.cpp file to see how __kmpc_dist_dispatch_init_4, __kmpc_dispatch_next_4, and
@@ -73,26 +49,20 @@ typedef void (*for_body_3) (int i, void * arg1, void * arg2, void * arg3);
  *
  * Rewrite the runtime/test/rex_kmpapi/rex_for.c example to use our interface rex_parallel and rex_for
  */
-extern void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
-
-/**
- * A simpler implementation that always use dynamic schedule policy
- * @param low
- * @param up
- * @param stride
- * @param sched_type
- * @param chunk
- * @param for_body_1
- * @param args
- */
-extern void rex_for(int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
-
-/**
- * rex_parallel_for is the combination of rex_parallel and rex_for
- */
-extern void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk, void (*for_body_1) (int, void *), void *args);
-extern void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk, void (*for_body_1) (int, void *), void *args);
-
+typedef enum rex_sched_type {
+    REX_SCHED_STATIC,
+    REX_SCHED_DYNAMIC,
+    REX_SCHED_GUIDED,
+} rex_sched_type_t;
+#define REX_DEFAULT_CHUNK_SIZE -1
+typedef void (*rex_for_body_t) (int i, void * arg1, void * arg2, void * arg3);
+extern void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk,
+                          rex_for_body_t for_body, void *arg1, void * arg2, void *arg3);
+extern void rex_for(int low, int up, int stride, int chunk, rex_for_body_t for_body, void *arg1, void * arg2, void *arg3);
+extern void rex_parallel_for_sched(int num_threads, int low, int up, int stride, rex_sched_type_t sched_type, int chunk,
+                                   rex_for_body_t for_body, void *arg1, void *arg2, void * arg3);
+extern void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk,
+                             rex_for_body_t for_body, void *arg1, void *arg2, void * arg3);
 
 /**
  * tasking interface will need some reverse-engineering and studying the runtime/test/rex_kmpapi/kmp_taskloop.c
@@ -103,7 +73,8 @@ extern void rex_parallel_for_sched(int num_threads, int low, int up, int stride,
  * Rewrite the rex_fib.c example using our interface for testing our interface, you need to use rex_parallel and rex_single as well.
  */
 typedef struct rex_task rex_task_t;
-typedef void (*rex_task_func) (void * priv, void * shared);
+typedef void (*rex_task_func_t) (void * priv, void * shared);
+typedef void (*rex_task_func_args_t) (void * arg1, void * arg2, void * arg3);
 
 typedef enum rex_task_deptype {
     REX_TASK_DEPTYPE_IN,
@@ -114,11 +85,14 @@ typedef enum rex_task_deptype {
 #define REX_DEFAULT_NUM_TASK_DEPS 16
 
 /* just create a task, not schedule it */
-extern rex_task_t * rex_create_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared, int num_deps);
-extern void rex_task(rex_task_func task_fun, int size_of_private, void * priv, void * shared);
+extern rex_task_t * rex_create_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared, int num_deps);
+extern rex_task_t * rex_create_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3, int num_deps);
+
+/* create and schedule a task */
+extern void rex_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared);
+extern void rex_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3);
 
 extern void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_deptype_t deptype);
-
 extern void rex_sched_task(rex_task_t * t);
 extern void rex_taskwait();
 

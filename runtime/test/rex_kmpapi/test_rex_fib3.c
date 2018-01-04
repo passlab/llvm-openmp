@@ -4,29 +4,21 @@
 
 int fib(int n);
 
-typedef struct fib_task_args {
-    int n;
-    int *x;
-} fib_task_args_t;
-
-static void fib_task_n_1 (void * args, void *shared) {
-    fib_task_args_t * fibargs = (fib_task_args_t * ) args;
-    *fibargs->x = fib(fibargs->n - 1);
+static void fib_task_n_1 (int n, int *x, int * notused) {
+    *x = fib(n - 1);
 }
 
 int fib(int n)
 {
   int x, y;
+  int notused;
   if (n<2)
     return n;
   else
     {
 //       #pragma omp task shared(x) firstprivate(n)
 //       x=fib(n-1);
-      fib_task_args_t args;
-      args.n = n;
-      args.x = &x;
-      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL, 0);
+      rex_task_t * task = rex_create_task_args((rex_task_func_args_t)&fib_task_n_1, (void*)n, &x, &notused, 0);
 
       rex_sched_task(task);
 

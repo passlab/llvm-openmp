@@ -18,10 +18,11 @@ double read_timer() {
 }
 
 /**
- * global_id is the default and has to be provided
+ * a parallel function must have 5 parameters: 
+ * global_id and tid are the arguments by default, the other three are users
  * num_args is 2 in this example. 
  */
-void hello_microtask(int * global_tid, int num_args, char * msg, int intmsg )
+void parallel_func(int *global_tid, int* tid, char *hello, char *world, int arg3) 
 {
     /* 
     va_list ap;
@@ -29,7 +30,7 @@ void hello_microtask(int * global_tid, int num_args, char * msg, int intmsg )
     char * msg = va_arg(ap, char *);
     va_end(ap);
     */
-    printf("Hello World: %d (gid: %d) of %d: msg: %s, intmsg: %d\n", omp_get_thread_num(), *global_tid, omp_get_num_threads(), msg, intmsg);
+    printf("%d (gid: %d) of %d: msg: %s %s %d\n", *tid, *global_tid, omp_get_num_threads(), hello, world, (long)arg3);
     /* for master construct */
     if (rex_master(*global_tid)) {
         printf("Master greeting: (gid: %d)\n", *global_tid);
@@ -44,7 +45,7 @@ void hello_microtask(int * global_tid, int num_args, char * msg, int intmsg )
 
     /* for single construct */
     if (rex_single(*global_tid)) {
-        printf("Solo greeting: (gid: %d)\n", *global_tid);
+        printf("Solo greeting: (gid: %d:%d)\n", *global_tid, *tid);
         rex_end_single(*global_tid);
     }
 
@@ -58,14 +59,17 @@ int main(int argc, char *argv[])
     if (argc == 2) nums = atoi(argv[1]);
     int i;
     int num_runs = 1;
+    char *hello = "Hello";
+    char *world = "World";
+    int int20 = 20;
     double times = read_timer();
     int current_thread = rex_get_global_thread_num();
     printf("========================================================\n");
-    rex_parallel(nums, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 0);
+    rex_parallel(nums, (rex_pfunc_t)&parallel_func, hello, world, (void*)int20);
 
     printf("========================================================\n");
     for (i=0; i<num_runs; i++) {
-        rex_parallel(nums/2, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 1);
+        rex_parallel(nums/2, (rex_pfunc_t)&parallel_func, hello, world, (void*)int20);
     }
     nums = rex_get_total_num_threads();
     printf("Result (%d threads): %f, current_thread: %d\n", nums, times/num_runs, current_thread);
@@ -73,7 +77,7 @@ int main(int argc, char *argv[])
     
     times = read_timer();
     printf("========================================================\n");
-    rex_parallel(nums*2, (rex_pfunc_t)&hello_microtask, 2, "naked runtime", 2);
+    rex_parallel(nums*2, (rex_pfunc_t)&parallel_func, hello, world, (void*)int20);
     times = read_timer() - times;
 
     nums = rex_get_total_num_threads();

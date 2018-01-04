@@ -69,7 +69,7 @@ int fib(int n)
 }
 
 
-void parallel_func(int * global_tid, int num_args, int n, int * result ) {
+void parallel_func(int * global_tid, int *tid, int n, int * result, void*notused ) {
     if (rex_single(*global_tid)){
         int i;
         *result = fib(n);
@@ -88,7 +88,7 @@ int main(int argc, char * argv[])
   unsigned long long tm_elaps; 
 
   n = atoi(argv[1]);
-  rex_parallel(4, (rex_pfunc_t)parallel_func, 2, n, &result);
+  rex_parallel(4, (rex_pfunc_t)parallel_func, (void*)n, &result, NULL);
   printf ("fib(%d) = %d\n", n, fib(n));
   return 0;
 }
