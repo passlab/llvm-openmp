@@ -20,8 +20,8 @@ extern int rex_get_num_threads_in_team();
 extern int rex_in_parallel( );
 extern void rex_set_num_threads(int num_threads );
 
-typedef void (*rex_pfunc_t)    (int *global_tid, int * tid, void * arg1, void * arg2, void * arg3);
-extern void rex_parallel(int num_threads, rex_pfunc_t func, void * arg1, void * arg2, void * arg3);
+typedef void (*rex_function_t)    (void * arg1, ...);
+extern void rex_parallel(int num_threads, rex_function_t func, int argc, ...);
 
 extern void rex_barrier(int gtid);
 extern void rex_barrier_1();
@@ -55,6 +55,8 @@ typedef enum rex_sched_type {
     REX_SCHED_GUIDED,
 } rex_sched_type_t;
 #define REX_DEFAULT_CHUNK_SIZE -1
+typedef void (*rex_pfunc_3args_t)    (int *global_tid, int * tid, void * arg1, void * arg2, void * arg3);
+extern void rex_parallel_3args(int num_threads, rex_pfunc_3args_t func, void * arg1, void * arg2, void * arg3);
 typedef void (*rex_for_body_t) (int i, void * arg1, void * arg2, void * arg3);
 extern void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int chunk,
                           rex_for_body_t for_body, void *arg1, void * arg2, void *arg3);
@@ -73,8 +75,6 @@ extern void rex_parallel_for(int num_threads, int low, int up, int stride, int c
  * Rewrite the rex_fib.c example using our interface for testing our interface, you need to use rex_parallel and rex_single as well.
  */
 typedef struct rex_task rex_task_t;
-typedef void (*rex_task_func_t) (void * priv, void * shared);
-typedef void (*rex_task_func_args_t) (void * arg1, void * arg2, void * arg3);
 
 typedef enum rex_task_deptype {
     REX_TASK_DEPTYPE_IN,
@@ -85,16 +85,25 @@ typedef enum rex_task_deptype {
 #define REX_DEFAULT_NUM_TASK_DEPS 16
 
 /* just create a task, not schedule it */
-extern rex_task_t * rex_create_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared, int num_deps);
-extern rex_task_t * rex_create_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3, int num_deps);
-
-/* create and schedule a task */
-extern void rex_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared);
-extern void rex_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3);
+extern rex_task_t * rex_create_task(int num_deps, rex_function_t task_func, int argc, ...);
+extern rex_task_t * rex_create_task_data(int num_deps, rex_function_t task_func, int argc, void * data, int datasize, ...);
 
 extern void rex_task_add_dependency(rex_task_t * t, void * base, int length, rex_task_deptype_t deptype);
 extern void rex_sched_task(rex_task_t * t);
 extern void rex_taskwait();
+
+/* create and schedule a task */
+#define REX_TASK(num_deps, task_func, argc, ...)                                        \
+    do {                                                                                \
+        rex_task_t * t = rex_create_task(num_deps, task_func, argc, __VA_ARGS__);       \
+        rex_sched_task(t);                                                              \
+    } while(0)
+
+#define REX_TASK_DATA(num_deps, task_func, argc, data, datasize, ...)                                           \
+    do {                                                                                                        \
+        rex_task_t * t = rex_create_task_data(num_deps, task_func, argc, data, datasize, __VA_ARGS__);          \
+        rex_sched_task(t);                                                                                      \
+    } while(0)
 
 /* taskgroup_begin and taskgroup_end has to be used in a pair, within one function (?) */
 extern void rex_taskgroup_begin();

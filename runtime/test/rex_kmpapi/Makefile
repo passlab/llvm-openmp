@@ -1,4 +1,8 @@
-default: test_rex_parallel test_rex_for test_rex_fib test_rex_fib2 test_rex_fib3 test_rex_fib_dep
+default: test_rex_parallel test_rex_for test_rex_fib test_rex_fib2 test_rex_fib_dep
+
+test_rex_PARALLEL: test_rex_PARALLEL.c
+	g++ -c $< -I../../../build/runtime/src -std=c++11
+	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 
 test_rex_parallel: test_rex_parallel.c
 	g++ -c $< -I../../../build/runtime/src -std=c++11
@@ -13,10 +17,6 @@ test_rex_fib: test_rex_fib.c
 	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 
 test_rex_fib2: test_rex_fib2.c
-	g++ -c -g $< -I../../../build/runtime/src -save-temps -std=c++11
-	g++ $@.o -L../../../build/runtime/src -lomp -o $@
-
-test_rex_fib3: test_rex_fib3.c
 	g++ -c -g $< -I../../../build/runtime/src -save-temps -std=c++11
 	g++ $@.o -L../../../build/runtime/src -lomp -o $@
 
@@ -39,4 +39,4 @@ test_omp_fib: test_omp_fib.c
 	clang -fopenmp $< -o $@ 
 
 clean:
-	rm -rf test_rex_parallel test_rex_for test_rex_fib test_rex_fib2 test_rex_fib3 test_rex_fib_dep *.o test_omp_parallel test_omp_for test_omp_fib  *.ll
+	rm -rf test_rex_parallel test_rex_for test_rex_fib test_rex_fib2 test_rex_fib_dep *.o test_omp_parallel test_omp_for test_omp_fib  *.ll *.ii *.s

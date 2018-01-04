@@ -134,8 +134,67 @@ void rex_set_num_threads(int num_threads )
     __kmp_push_num_threads( NULL, global_tid, num_threads );
 }
 
+inline static int rex_exe_func(rex_function_t func, int argc, void * argv[]) {
+    switch (argc) {
+        default:
+            fprintf(stderr, "Too many/few args to task func: %d!\n", argc);
+            fflush(stderr);
+            exit(-1);
+        case 1:
+            func(argv[0]);
+            break;
+        case 2:
+            func(argv[0], argv[1]);
+            break;
+        case 3:
+            func(argv[0], argv[1], argv[2]);
+            break;
+        case 4:
+            func(argv[0], argv[1], argv[2], argv[3]);
+            break;
+        case 5:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4]);
+            break;
+        case 6:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+            break;
+        case 7:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+            break;
+        case 8:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
+            break;
+        case 9:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);
+            break;
+        case 10:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9]);
+            break;
+        case 11:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9],
+                      argv[10]);
+            break;
+        case 12:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9],
+                      argv[10], argv[11]);
+            break;
+        case 13:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9],
+                      argv[10], argv[11], argv[12]);
+            break;
+        case 14:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9],
+                      argv[10], argv[11], argv[12], argv[13]);
+            break;
+        case 15:
+            func(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8], argv[9],
+                      argv[10], argv[11], argv[12], argv[13], argv[14]);
+            break;
+    }
+}
+
 /**
- * rex_parallel is implemented as a wrapper of __kmpc_fork_call, but we restricted that the
+ * rex_parallel_3args is implemented as a wrapper of __kmpc_fork_call, but we restricted that the
  * microtask (parallel_func) must be defined with 5 parameters as follows:
 
  void parallel_func(int *global_tid, int* tid, void *arg1, void *arg2, void * arg3)
@@ -154,11 +213,68 @@ void rex_set_num_threads(int num_threads )
  * @param arg2
  * @param arg3
  */
-void rex_parallel(int num_threads, rex_pfunc_t func, void * arg1, void * arg2, void * arg3) {
+void rex_parallel_3args(int num_threads, rex_pfunc_3args_t func, void * arg1, void * arg2, void * arg3) {
     int current_thread = __kmpc_global_thread_num(NULL);
     __kmpc_push_num_threads(NULL, current_thread, num_threads );
     __kmpc_fork_call(NULL, 3, (kmpc_micro)func, arg1, arg2, arg3);
 }
+
+/**
+ * the kmp microtask used to pass to __kmpc_fork_call which will execute our rex_function_t
+ *
+ * This one must be of "void (*kmpc_micro)(kmp_int32 *global_tid, kmp_int32 *bound_tid, ...)" type. It cannot be inlined
+ * @param global_tid
+ * @param tid
+ * @param func
+ * @param argc
+ * @param argv
+ */
+static void rex_parallel_func(int *global_tid, int* tid, rex_function_t func, int argc, void* argv[]) {
+    rex_exe_func(func, argc, argv);
+}
+
+/**
+ * rex_parallel minics "omp parallel"
+ * @param num_threads
+ * @param func: the parallel function
+ * @param argc: the number of arguments to be passed to the func
+ * @param ...: the arguments
+ */
+void rex_parallel(int num_threads, rex_function_t func, int argc, ...) {
+    int current_thread = __kmpc_global_thread_num(NULL);
+    __kmpc_push_num_threads(NULL, current_thread, num_threads );
+
+    void * arguments[argc];
+    void ** argv=arguments;
+    /* copy the arguments */
+    va_list ap;
+    va_start(ap, argc);
+    int i;
+    for (i = argc - 1; i >= 0; --i) {
+        *argv++ = va_arg(ap, void *);
+    }
+    va_end(ap);
+    argv=arguments;
+
+    __kmpc_fork_call(NULL, 3, (kmpc_micro)rex_parallel_func, func, argc, argv);
+}
+
+/**
+ * TODO and TBD: using variadic macro and __VA_ARGS__ to implement rex_parallel so it can
+ * accept parallel_func with arbitrary number of parameters (+). The - points are 1) the use of macro
+ * relies on users to provide correct type of arguments and 2) this needs to be put in header file and it would
+ * require to expose runtime header as well (kmp.h, etc) to user code.
+ *
+ * Initial design for rex_for related (same approach) and rex_task related (using ... and va_arg) are in the following
+ *
+ * So it is TBD whether we will do this or not. NOTE: another approach is to use C++11 variadic template
+ */
+#define REX_PARALLEL(num_threads, parallel_func, argc, ...)             \
+    do {                                                                    \
+        int current_thread = __kmpc_global_thread_num(NULL);                \
+        __kmpc_push_num_threads(NULL, current_thread, num_threads );        \
+        __kmpc_fork_call(NULL, argc, (kmpc_micro)func, __VA_ARGS__);    \
+    } while(0)
 
 void rex_barrier(int gtid)
 {
@@ -290,6 +406,16 @@ void rex_for_sched(int low, int up, int stride, rex_sched_type_t sched_type, int
 }
 
 /**
+ * TODO and TBD: using variadic macro and __VA_ARGS__ to implement rex_for related APIs, see +/- points above from
+ * REX_PARALLEL comments.
+ */
+#define REX_FOR_SCHED(low, up, stride, sched_type, chunk, for_body, ...)            \
+    do {                                                                            \
+        /* copy the code from rex_for_sched and end each line with \ for macro */   \
+        /* for body call is replaced with for_body(i, __VA_ARGS__); */              \
+    } while(0)
+
+/**
  * simple rex_for that minics "omp for" with default clause and sched type
  * @param low
  * @param up
@@ -361,10 +487,12 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk,
  * |      kmp_taskdata_t                              |
  * |  |---kmp_task_t                                  |
  * |  |   task_func                                   |
- * |  |   num_deps_user_requested(int)                |
+ * |  |   argc                                        |
+ * |  |   max_num_deps(int)                           |
  * |  |---num_deps(int)                               |
  * |      kmp_depend_info_t[num_deps_user_requested]  |
- * |      private data area                           |
+ * |      argv                                        |
+ * |      data (optioal)                              |
  * ----------------------------------------------------
  *
  * in rex_create_task, __kmpc_omp_task_alloc is called and returned kmp_task_t. Since we use a rex_taskinfo_t data structure
@@ -374,10 +502,8 @@ void rex_parallel_for(int num_threads, int low, int up, int stride, int chunk,
  */
 typedef struct rex_taskinfo {
     kmp_task_t task;
-    union {
-        rex_task_func_t func;
-        rex_task_func_args_t func_args;
-    } task_func;
+    rex_function_t task_func;
+    int argc;   /* number of args to the task func */
     int max_num_deps; /* the number of dependencies set when calling rex_create_task, i.e. max # of deps */
     int num_deps; /* the number of dependencies later on when rex_task_add_dependency is called for the actual added */
 } rex_taskinfo_t;
@@ -401,26 +527,15 @@ FPtr f2 = *(FPtr*)(&ptr);   // Function pointer restored
 static int rex_task_entry_func(int gtid, void * arg) {
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*) arg;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(arg);
-    void * task_private = (void*)&depinfo[rex_tinfo->max_num_deps];
+    void ** argv = (void**)&depinfo[rex_tinfo->max_num_deps];
 
-//    fprintf(stderr, "task func when executing tasks: %X\n", task_func);
-    rex_tinfo->task_func.func(task_private, rex_tinfo->task.shareds);
-
-    //((void (*)(void *))(*(task->routine)))(task->shareds);
-}
-
-static int rex_task_entry_func_args(int gtid, void * arg) {
-    rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*) arg;
-    kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(arg);
-    void ** task_private = (void**)&depinfo[rex_tinfo->max_num_deps];
-
- //   fprintf(stderr, "task func when executing tasks: %X, n: %d, &x: %p\n", rex_tinfo->task_func.func_args, task_private[0], task_private[1]);
-    rex_tinfo->task_func.func_args(task_private[0], task_private[1], task_private[2]);
+    rex_function_t task_func = rex_tinfo->task_func;
+    rex_exe_func(task_func, rex_tinfo->argc, argv);
+    //   fprintf(stderr, "task func when executing tasks: %X, n: %d, &x: %p\n", rex_tinfo->task_func.func_args, task_private[0], task_private[1]);
 }
 
 /**
- * create a task object, but not schedule it.
- *
+ * Create a task object, but not schedule it.
  * Due to the way kmp stores a task, this function calls __kmpc_omp_task_alloc for allocating all the memory for the
  * task, see above the note about the memory for a task.
  *
@@ -430,51 +545,95 @@ static int rex_task_entry_func_args(int gtid, void * arg) {
  * @param shared: the pointer of the shared data, only the pointer
  * @return
  */
-rex_task_t * rex_create_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared, int num_deps) {
 
+/**
+ * Create a task object, but not schedule it.
+ * Due to the way kmp stores a task, this function calls __kmpc_omp_task_alloc for allocating all the memory for the
+ * task, see above the note about the memory for a task.
+ *
+ * all the arguments will be copied to the argv area of the task memory
+ *
+ * @param num_deps: number of dependencies of this task
+ * @param task_func: the task function, should have at least one parameters and at most 15. And the argc should be provided
+ * @param argc: the number of arguments provided
+ * @param ...
+ * @return
+ */
+rex_task_t * rex_create_task(int num_deps, rex_function_t task_func, int argc, ...) {
+    if (argc > 15 || argc < 1) {
+        fprintf(stderr, "Number of arguments allowed for task func are 1 to 15\n");
+        return NULL;
+    }
     /* kmpc_omp_task_alloc allocates kmp_taskdata_t and the rest */
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
-                                sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + size_of_private,
-                                              sizeof(void*), &rex_task_entry_func);
-    task->shareds = shared;
+                                              sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps +
+                                                      sizeof(void*)*argc,
+                                              0, &rex_task_entry_func);
+    task->shareds = NULL;
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
-    rex_tinfo->task_func.func = task_func;
+    rex_tinfo->task_func = task_func;
+    rex_tinfo->argc = argc;
     rex_tinfo->max_num_deps = num_deps;
     rex_tinfo->num_deps = 0;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
-    void * task_private = (void*)&depinfo[num_deps];
+    void ** argv = (void**)&depinfo[num_deps];
+    /* copy the arguments */
+    va_list ap;
+    va_start(ap, argc);
+    int i;
+    for (i = argc - 1; i >= 0; --i) {
+        *argv++ = va_arg(ap, void *);
+    }
+    va_end(ap);
+//    fprintf(stderr, "Creating tasks: %X, n: %d, &x: %p\n", task_func, arg1, arg2);
 
-    /* copy the private data */
-    memcpy(task_private, priv, size_of_private);
     return (rex_task_t *) task;
 }
 
 /**
- * create a task with three arguments. The three arguments are copied to the private data area of the task
- * @param task_fun
- * @param arg1
- * @param arg2
- * @param arg3
+ * This function create a task with input data and multiple arguments. In this function, input data are
+ * copied to the task data area of the task memory area, and arguments to be passed to the task_func are
+ * copied to the argv area
+ *
+ * The task function should have argc (>=2) parameters, the first two parameters are void *data and int datasize.
+ *
  * @param num_deps
+ * @param task_func
+ * @param argc
+ * @param data
+ * @param datasize
+ * @param ...
  * @return
  */
-rex_task_t * rex_create_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3, int num_deps) {
+rex_task_t * rex_create_task_data(int num_deps, rex_function_t task_func, int argc, void * data, int datasize, ...) {
+
     /* kmpc_omp_task_alloc allocates kmp_taskdata_t and the rest */
     kmp_task_t * task = __kmpc_omp_task_alloc(NULL,__kmp_get_global_thread_id(), 1,
-                                              sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps + sizeof(void*)*3,
-                                              0, &rex_task_entry_func_args);
+                                              sizeof(rex_taskinfo_t) + sizeof(kmp_depend_info_t) * num_deps +
+                                                      sizeof(void*)*(argc) + datasize,
+                                              0, &rex_task_entry_func);
     task->shareds = NULL;
     rex_taskinfo_t * rex_tinfo = (rex_taskinfo_t*)task;
-    rex_tinfo->task_func.func_args = task_func;
+    rex_tinfo->task_func = task_func;
+    rex_tinfo->argc = argc;
     rex_tinfo->max_num_deps = num_deps;
     rex_tinfo->num_deps = 0;
     kmp_depend_info_t * depinfo = REX_GET_TASK_DEPEND_INFO_PTR(task);
-    void ** task_private = (void**)&depinfo[num_deps];
+    void ** argv = (void**)&depinfo[num_deps];
+    void * task_data = argv+argc;
     /* copy the private data */
-    task_private[0] = arg1;
-    task_private[1] = arg2;
-    task_private[2] = arg3;
-//    fprintf(stderr, "Creating tasks: %X, n: %d, &x: %p\n", task_func, arg1, arg2);
+    memcpy(task_data, data, datasize);
+    *argv++ = task_data;
+    *argv++ = (void*)datasize;
+
+    /* copy the arguments */
+    va_list ap;
+    va_start(ap, datasize);
+    int i;
+    for (i = argc - 1; i >= 0; --i) {
+        *argv++ = va_arg(ap, void *);
+    }
+    va_end(ap);
 
     return (rex_task_t *) task;
 }
@@ -531,31 +690,6 @@ void rex_sched_task(rex_task_t * t) {
      * So the following call is actually enough for the above if-else code seg
     __kmpc_omp_task_with_deps(NULL, gtid, (kmp_task_t*)t, rex_tinfo->num_deps, depinfo, 0, NULL);
      */
-}
-
-/**
- * create a task and give it to runtime for execution.
- * @param task_fun
- * @param size_of_private
- * @param priv
- * @param shared
- */
-void rex_task(rex_task_func_t task_func, int size_of_private, void * priv, void * shared) {
-    rex_task_t * t = rex_create_task(task_func, size_of_private, priv, shared, 0);
-    rex_sched_task(t);
-}
-
-/**
- * create a task with three arguments and give it to runtime for execution. The three arguments are copied to the
- * private data area of the task first
- * @param task_fun
- * @param arg1
- * @param arg2
- * @param arg3
- */
-void rex_task_args(rex_task_func_args_t task_func, void * arg1, void * arg2, void * arg3) {
-    rex_task_t * t = rex_create_task_args(task_func, arg1, arg2, arg3, 0);
-    rex_sched_task(t);
 }
 
 void rex_taskwait() {
