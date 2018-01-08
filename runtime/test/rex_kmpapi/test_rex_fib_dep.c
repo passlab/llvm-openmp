@@ -4,30 +4,16 @@
 
 int fib(int n);
 
-typedef struct fib_task_args {
-    int n;
-    int *x;
-} fib_task_args_t;
-
-static void fib_task_n_1 (void * args, void *shared) {
-    fib_task_args_t * fibargs = (fib_task_args_t * ) args;
-    *fibargs->x = fib(fibargs->n - 1);
+static void fib_task_n_1 (int n, int *x) {
+    *x = fib(n - 1);
 }
 
-static void fib_task_n_2 (void * args, void *shared) {
-    fib_task_args_t * fibargs = (fib_task_args_t * ) args;
-    *fibargs->x = fib(fibargs->n - 2);
+static void fib_task_n_2 (int n, int *y) {
+    *y = fib(n - 2);
 }
 
-typedef struct fib_task_sum_args {
-    int *x;
-    int *y;
-    int *result;
-} fib_task_sum_args_t;
-
-static void fib_task_sum (void * args, void *shared) {
-    fib_task_sum_args_t * fibargs = (fib_task_sum_args_t * ) args;
-    *fibargs->result = *fibargs->x + *fibargs->y;
+static void fib_task_sum (int x, int y, int *result) {
+    *result = x + y;
 }
 
 int fib(int n)
@@ -40,25 +26,15 @@ int fib(int n)
 //       #pragma omp task shared(x) firstprivate(n)
 //       x=fib(n-1);
 //      printf("X: %X, Y: %X\n", &x, &y);
-      fib_task_args_t args;
-      args.n = n;
-      args.x = &x;
-      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL, 1);
+      rex_task_t * task = rex_create_task(0, (rex_function_t)&fib_task_n_1, 2, n, &x);
       rex_task_add_dependency(task, &x, sizeof(int), REX_TASK_DEPTYPE_OUT);
       rex_sched_task(task);
       
-      fib_task_args_t args2;
-      args2.n = n;
-      args2.x = &y;
-      task = rex_create_task(&fib_task_n_2, sizeof(fib_task_args_t), &args2, NULL, 1);
+      task = rex_create_task(0, (rex_function_t)&fib_task_n_2, 2, n, &y);
       rex_task_add_dependency(task, &y, sizeof(int), REX_TASK_DEPTYPE_OUT);
       rex_sched_task(task);
 
-      fib_task_sum_args_t sumargs;
-      sumargs.x = &x;
-      sumargs.y = &y;
-      sumargs.result = &result;
-      task = rex_create_task(&fib_task_sum, sizeof(fib_task_sum_args_t), &sumargs, NULL, 2);
+      task = rex_create_task(0, (rex_function_t)&fib_task_sum, 3, x, y, &result);
       rex_task_add_dependency(task, &x, sizeof(int), REX_TASK_DEPTYPE_IN);
       rex_task_add_dependency(task, &y, sizeof(int), REX_TASK_DEPTYPE_IN);
       rex_sched_task(task);
@@ -69,11 +45,12 @@ int fib(int n)
 }
 
 
-void parallel_func(int * global_tid, int *tid, int n, int * result, void*notused ) {
-    if (rex_single(*global_tid)){
+void parallel_func(int n, int * result, void*notused ) {
+    int global_tid = rex_get_global_thread_num();
+    if (rex_single(global_tid)){
         int i;
         *result = fib(n);
-        rex_end_single(*global_tid);
+        rex_end_single(global_tid);
     }
 }
 
@@ -88,7 +65,7 @@ int main(int argc, char * argv[])
   unsigned long long tm_elaps; 
 
   n = atoi(argv[1]);
-  rex_parallel(4, (rex_pfunc_t)parallel_func, (void*)n, &result, NULL);
+  rex_parallel(4, (rex_function_t)parallel_func, 3, (void*)n, &result, NULL);
   printf ("fib(%d) = %d\n", n, fib(n));
   return 0;
 }

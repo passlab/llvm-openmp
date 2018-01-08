@@ -4,29 +4,21 @@
 
 int fib(int n);
 
-typedef struct fib_task_args {
-    int n;
-    int *x;
-} fib_task_args_t;
-
-static void fib_task_n_1 (void * args, void *shared) {
-    fib_task_args_t * fibargs = (fib_task_args_t * ) args;
-    *fibargs->x = fib(fibargs->n - 1);
+static void fib_task_n_1 (int n, int *x) {
+    *x = fib(n - 1);
 }
 
 int fib(int n)
 {
   int x, y;
+  int notused;
   if (n<2)
     return n;
   else
     {
 //       #pragma omp task shared(x) firstprivate(n)
 //       x=fib(n-1);
-      fib_task_args_t args;
-      args.n = n;
-      args.x = &x;
-      rex_task_t * task = rex_create_task(&fib_task_n_1, sizeof(fib_task_args_t), &args, NULL, 0);
+      rex_task_t * task = rex_create_task(0, (rex_function_t)&fib_task_n_1, 2, n, &x);
 
       rex_sched_task(task);
 
@@ -39,12 +31,13 @@ int fib(int n)
 }
 
 
-void parallel_func(int * global_tid, int*tid, int n, int * result, void *notused ) {
+void parallel_func(int n, int * result, void *notused ) {
+    int global_tid = rex_get_global_thread_num();
     printf("Thread %d of %d\n", omp_get_thread_num(), omp_get_num_threads());
-    if (rex_single(*global_tid)){
+    if (rex_single(global_tid)){
         int i;
         *result = fib(n);
-        rex_end_single(*global_tid);
+        rex_end_single(global_tid);
     }
 }
 
@@ -59,7 +52,7 @@ int main(int argc, char * argv[])
   unsigned long long tm_elaps; 
 
   n = atoi(argv[1]);
-  rex_parallel(4, (rex_pfunc_t)parallel_func, (void*) n, &result, NULL);
+  rex_parallel(4, (rex_function_t)parallel_func, 3, (void*) n, &result, NULL);
   printf ("fib(%d) = %d\n", n, fib(n));
   return 0;
 }
