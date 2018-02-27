@@ -2362,6 +2362,25 @@ typedef struct kmp_teams_size {
 } kmp_teams_size_t;
 #endif
 
+#if REX_KMP_SUPPORT
+/* since a kmp thread may become a root thread anytime and multi-times,
+ * We use this data structure as the state of each root thread of a kmp thread.
+ *
+ * Each kmp thread (kmp_base_info) has a counter for the total number of times a root
+ * thread is created from the kmp thread. For each root thread, id is counter value when
+ * the root thread is created, which is the sequence number of the root threads.
+ * The root thread id is the combination of gtid of the kmp thread and this id value.
+ *
+ */
+typedef struct rex_root_thread {
+    int gtid;
+    int counter; /* the sequence of this root of the kmp thread */
+    void *return_value; /* the stored return value of the thread */
+    volatile int finished; /* whether root thread finishes or not */
+    //kmp_lock_t join_lock; /* a lock for mutex access with the joining thread */
+    struct rex_root_thread * next; /* for the link-list of all the root threads off this kmp thread */
+} rex_root_thread_t;
+#endif
 // OpenMP thread data structures
 
 typedef struct KMP_ALIGN_CACHE kmp_base_info {
@@ -2495,6 +2514,15 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 #endif /* USE_ITT_BUILD */
 #if KMP_STATS_ENABLED
   kmp_stats_list *th_stats;
+#endif
+
+#if REX_KMP_SUPPORT
+  void (*root_thread_func)(void *arg);
+  void * root_thread_arg;
+  int root_counter; /* the sequence id for being a root in the lift of this thread */
+  kmp_lock_t rex_root_lock; /* lock for mutex access to the root_thread_states link list */
+  rex_root_thread_t *current_root; /* the current root thread being executed */
+  rex_root_thread_t *unjoined_roots;
 #endif
 } kmp_base_info_t;
 
@@ -2679,6 +2707,10 @@ typedef struct kmp_base_root {
   volatile int r_begin;
   int r_blocktime; /* blocktime for this root and descendants */
   int r_cg_nthreads; // count of active threads in a contention group
+
+#if REX_KMP_SUPPORT
+  kmp_root_p * r_parent;
+#endif
 } kmp_base_root_t;
 
 typedef union KMP_ALIGN_CACHE kmp_root {
@@ -3278,6 +3310,11 @@ extern void __kmp_create_monitor(kmp_info_t *th);
 
 extern void *__kmp_launch_thread(kmp_info_t *thr);
 
+#if REX_KMP_SUPPORT
+extern void __rex_create_root_thread(int gtid, kmp_info_t *th, size_t stack_size);
+extern void __kmp_link_native(kmp_info_t *th, size_t stack_size);
+extern void *__kmp_launch_worker(void *thr);
+#endif
 extern void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size);
 
 #if KMP_OS_WINDOWS
@@ -3508,6 +3545,13 @@ extern int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int npr, int argc,
                                   );
 
 /* ------------------------------------------------------------------------ */
+#if REX_KMP_SUPPORT
+KMP_EXPORT void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg);
+KMP_EXPORT int  __kmpc_root_thread_join(void * thread, void ** retval);
+KMP_EXPORT void __kmpc_root_thread_set_retval(void * retval);
+KMP_EXPORT int __kmpc_native_thread_attach();
+KMP_EXPORT int __kmpc_cool_threads(int num_threads);
+#endif
 
 KMP_EXPORT void __kmpc_begin(ident_t *, kmp_int32 flags);
 KMP_EXPORT void __kmpc_end(ident_t *);

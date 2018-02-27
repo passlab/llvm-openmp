@@ -491,7 +491,11 @@ static kmp_int32 __kmp_set_stack_info(int gtid, kmp_info_t *th) {
   return FALSE;
 }
 
-static void *__kmp_launch_worker(void *thr) {
+#if REX_KMP_SUPPORT
+#else
+static
+#endif
+void *__kmp_launch_worker(void *thr) {
   int status, old_type, old_state;
 #ifdef KMP_BLOCK_SIGNALS
   sigset_t new_set, old_set;
@@ -764,6 +768,36 @@ static void *__kmp_launch_monitor(void *thr) {
   return thr;
 }
 #endif // KMP_USE_MONITOR
+
+/**
+ * The following code was originally part of __kmp_create_worker and it does not make sense
+ * @param gtid
+ * @param th
+ * @param stack_size
+ */
+void __kmp_link_native(kmp_info_t *th, size_t stack_size) {
+  int gtid = th->th.th_info.ds.ds_gtid = gtid;
+
+#if KMP_STATS_ENABLED
+  // sets up worker thread stats
+  __kmp_acquire_tas_lock(&__kmp_stats_lock, gtid);
+
+  // th->th.th_stats is used to transfer thread-specific stats-pointer to
+  // __kmp_launch_worker. So when thread is created (goes into
+  // __kmp_launch_worker) it will set its thread local pointer to
+  // th->th.th_stats
+  // For root threads, __kmp_stats_thread_ptr is set in __kmp_register_root(),
+  // so set the th->th.th_stats field to it.
+  th->th.th_stats = __kmp_stats_thread_ptr;
+  __kmp_release_tas_lock(&__kmp_stats_lock, gtid);
+
+#endif // KMP_STATS_ENABLED
+
+  KA_TRACE(10, ("__kmp_link_native: uber thread (%d)\n", gtid));
+  th->th.th_info.ds.ds_thread = pthread_self();
+  __kmp_set_stack_info(gtid, th);
+  __kmp_check_stack_overlap(th);
+}
 
 void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   pthread_t handle;

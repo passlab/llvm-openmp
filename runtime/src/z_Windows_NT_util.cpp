@@ -1040,6 +1040,44 @@ void *__stdcall __kmp_launch_monitor(void *arg) {
 }
 #endif
 
+/**
+* The following code was originally part of __kmp_create_worker and it does not make sense
+* @param gtid
+* @param th
+* @param stack_size
+*/
+void __kmp_link_native(kmp_info_t *th, size_t stack_size) {
+  int gtid = th->th.th_info.ds.ds_gtid = gtid;
+  kmp_thread_t handle;
+  DWORD idThread;
+
+  KA_TRACE(10, ("__kmp_link_native: try to create thread (%d)\n", gtid));
+
+  int stack_data;
+
+  /* TODO: GetCurrentThread() returns a pseudo-handle that is unsuitable for
+     other threads to use. Is it appropriate to just use GetCurrentThread?
+     When should we close this handle?  When unregistering the root? */
+  {
+    BOOL rc;
+    rc = DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                         GetCurrentProcess(), &th->th.th_info.ds.ds_thread, 0,
+                         FALSE, DUPLICATE_SAME_ACCESS);
+    KMP_ASSERT(rc);
+    KA_TRACE(10, (" __kmp_link_native: ROOT Handle duplicated, th = %p, "
+            "handle = %" KMP_UINTPTR_SPEC "\n",
+            (LPVOID)th, th->th.th_info.ds.ds_thread));
+    th->th.th_info.ds.ds_thread_id = GetCurrentThreadId();
+  }
+  if (TCR_4(__kmp_gtid_mode) < 2) { // check stack only if used to get gtid
+    /* we will dynamically update the stack range if gtid_mode == 1 */
+    TCW_PTR(th->th.th_info.ds.ds_stackbase, &stack_data);
+    TCW_PTR(th->th.th_info.ds.ds_stacksize, 0);
+    TCW_4(th->th.th_info.ds.ds_stackgrow, TRUE);
+    __kmp_check_stack_overlap(th);
+  }
+}
+
 void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
   kmp_thread_t handle;
   DWORD idThread;

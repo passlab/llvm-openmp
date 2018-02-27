@@ -3925,11 +3925,20 @@ static int __kmp_reset_root(int gtid, kmp_root_t *root) {
   }
 #endif
 
-  TCW_4(__kmp_nth,
-        __kmp_nth - 1); // __kmp_reap_thread will decrement __kmp_all_nth.
-  root->r.r_cg_nthreads--;
 
-  __kmp_reap_thread(root->r.r_uber_thread, 1);
+#if REX_KMP_SUPPORT
+  __kmp_root_counter--;
+  kmp_info_t * root_thread = __kmp_threads[gtid];
+  if (root_thread->th.current_root != NULL) { /* this was a root thread and being put back */
+    //free a root thread by putting it to the pool
+    root_thread->th.current_root = NULL;
+    __kmp_free_thread(root_thread); /* put the thread back to the pool */
+  } else {
+    TCW_4(__kmp_nth, __kmp_nth - 1); // __kmp_reap_thread will decrement __kmp_all_nth.
+    root->r.r_cg_nthreads--;
+    __kmp_reap_thread(root->r.r_uber_thread, 1);
+  }
+#endif
 
   // We canot put root thread to __kmp_thread_pool, so we have to reap it istead
   // of freeing.
@@ -3956,7 +3965,10 @@ void __kmp_unregister_root_current_thread(int gtid) {
   kmp_root_t *root = __kmp_root[gtid];
 
   KMP_DEBUG_ASSERT(__kmp_threads && __kmp_threads[gtid]);
+#if REX_KMP_SUPPORT
+#else
   KMP_ASSERT(KMP_UBER_GTID(gtid));
+#endif
   KMP_ASSERT(root == __kmp_threads[gtid]->th.th_root);
   KMP_ASSERT(root->r.r_active == FALSE);
 
@@ -4158,6 +4170,10 @@ static void __kmp_initialize_info(kmp_info_t *this_thr, kmp_team_t *team,
 
   KMP_DEBUG_ASSERT(!this_thr->th.th_spin_here);
   KMP_DEBUG_ASSERT(this_thr->th.th_next_waiting == 0);
+
+#if REX_KMP_SUPPORT
+  this_thr->th.root_thread_func = NULL;
+#endif
 
   KMP_MB();
 }
@@ -5592,6 +5608,37 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
   }
 #endif
 
+#if REX_KMP_SUPPORT
+  if (this_thr->th.current_root != NULL) { /* this is a root thread created by root_thread_create using native thread */
+    if (ompt_enabled.enabled) {/* TODO: OMPT needs to have a solution for this */
+
+      ompt_thread_t *root_thread = ompt_get_thread();
+      ompt_data_t *task_data;
+      __ompt_get_task_info_internal(0, NULL, &task_data, NULL, NULL, NULL);
+      if (ompt_enabled.ompt_callback_task_create) {
+        ompt_callbacks.ompt_callback(ompt_callback_task_create)(
+                NULL, NULL, task_data, ompt_task_initial, 0, NULL);
+        // initial task has nothing to return to
+      }
+
+      ompt_set_thread_state(root_thread, omp_state_work_serial);
+    }
+restart_as_root:
+
+    /* store it here as the promotion will reset them to NULL */
+    void (*root_thread_func)(void *) = this_thr->th.root_thread_func;
+    void * arg = this_thr->th.root_thread_arg;
+    rex_root_thread_t * thread = this_thr->th.current_root;
+
+    root_thread_func(arg);
+    thread->finished = 1;
+
+    /* Put myself back to the thread pool, and then go to the global while loop as worker */
+    //__kmp_unregister_root_current_thread(gtid); /* we cannot do this as this call unset pthread_key specific
+    __kmp_reset_root(gtid, this_thr->th.th_root);
+  }
+#endif
+
 #if OMPT_SUPPORT
   if (ompt_enabled.enabled) {
     this_thr->th.ompt_thread_info.state = omp_state_idle;
@@ -5607,6 +5654,11 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
 
     /* No tid yet since not part of a team */
     __kmp_fork_barrier(gtid, KMP_GTID_DNE);
+
+#if REX_KMP_SUPPORT
+    /* this thread is promoted to be a root thread and need to do as the root */
+    if (this_thr->th.current_root != NULL) goto restart_as_root;
+#endif
 
 #if OMPT_SUPPORT
     if (ompt_enabled.enabled) {
@@ -7742,3 +7794,622 @@ __kmp_determine_reduction_method(
 kmp_int32 __kmp_get_reduce_method(void) {
   return ((__kmp_entry_thread()->th.th_local.packed_reduction_method) >> 8);
 }
+
+#if REX_KMP_SUPPORT
+/**
+ * create a kmp root thread and let the thread execute user func (from either the thread pool or create directly)
+ *
+ * The motivation to have this function is to provide users pthread_-alike APIs for creating threads and those threads
+ * are visible to the kmp runtime before any OpenMP operations. So far, a user thread (called as uber thread in the kmp runtime)
+ * registers itself as kmp root thread if and when the user thread makes OpenMP calls (via API or directives). kmp runtime
+ * however does not track those user threads until they make those OpenMP calls. With this function, a thread created is
+ * known to the runtime before any OpenMP activities, thus provide better resource management and interoperability with
+ * other pthread-based runtime. For example a request for creating a thread may not be granted if the runtime oberve
+ * oversubscription situations. The runtime can also decide to promote a idle worker thread instead of creating a new one
+ * to grant such request.
+ *
+ * This function is implemented similarly as __kmp_allocate_thread, and the code for team-related initialization are
+ * removed as much as we can. The idea is to have this function to init/create the thread from either thread pool or
+ * a new thread by calling to __kmp_create_worker, so a kmp_info_t object is initialized for the new root thread.
+ * The thread itself will then needs to promote itself (through __rex_promote_to_root), which initializes the kmp_root_t
+ * object.
+ *
+ * Notes:
+ * 1. __kmp_forkjoin_lock lock is needed in this function and for the thread to promote (?), respectively
+ * 2. With regard to the thread hierarchy, the root thread of the root itself is this thread. We also added r_parent
+ * field in the kmp_root_t struct so we maintain root hierarchy.
+ * 3. With regards to uber thread: currently it seems each root thread is also a uber thread since a root thread is always
+ * started as of a user thread, which kmp considers it as a uber thread, see those KMP_ASSERT(KMP_UBER_GTID(gtid)); With
+ * this function, a newly created thread shares the same uber thread. Thus we need to remove those
+ * assertion (KMP_ASSERT(KMP_UBER_GTID(gtid));
+ * 4. __kmp_launch_thread needs to be changed to perform the root thread function passed as arguments to this function.
+ * Two places have calls to those function: 1) before entering into the main while forjoin loop (root thread created from
+ * __kmp_create_worker), 2) inside the forkjoin while loop right after the fork_barrier. So for a root thread promoted
+ * from a worker thread taken out of thread pool, it needs to be released from the fork_barrier by the thread who makes
+ * calls to __rex_root_thread_create function.
+ * 5. Code restructure for remove code duplication: currenly rex_root_thread_create is similar to __kmp_create_worker,
+ * and rex_promote_to_root copied some code from __kmp_register_root. We may need to restructure some code so we donot
+ * hard-duplicate code that will create maintenance headache.
+ * 6. OMPT: since we introduce capability of changing a worker thread to a root thread, or vice vesa, change or addition to
+ * OMPT events are needed. TBD
+ * 7. After root thread finishes it work, we can make it a worker thread and putting it to the thread pool, or completely
+ * let it off.
+ * 8. Because gtid is used as the index to access the reference of kmp_info_t thread from __kmp_threads array, and to access
+ * the reference of kmp_root_t root from __kmp_root array (see __kmp_register_root), we have to allocate/create thread first,
+ * and then to create the root object.
+ *
+ * Algorithms:
+ * 1. scan the thread pool to find the one that was root before, reinit and reuse it.
+ * 2. if none in the pool was root before, create root object, and initialize it, call the allocate worker function which
+ * will either get a worker one from the thread pool or create a new native thread.
+ * 3. The uber thread for the new root is set as the uber thread of the creating root (parent), thus this new created
+ * root thread is NOT a uber thread. NOTE: the uber thread may finishes before this root thread. So far, we will have to
+ * leave with it.
+ * @return
+ */
+void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
+  int gtid = __kmp_get_global_thread_id_reg();
+  kmp_root_t *parent_root;
+
+  /* a flag for the thread is taken from thread pool, or created from a native thread
+   *
+   * 1. from pool and it was a root thread before
+   * 2. from pool and it was not a root thread before
+   * 0. a native thread has to be created
+   */
+  int from_thread_pool = 0;
+
+  kmp_info_t * this_th = __kmp_threads[gtid]; // AC: potentially unsafe, not in sync with
+  parent_root = this_th->th.th_root;
+
+  /***
+   * scan the thread pool and the __kmp_root thread to find a root thread who is also in the pool,
+   * This is possible since a previous root thread may be recycled into the thread pool
+   * */
+  kmp_root_t * root;
+  kmp_info_t * root_thread;
+  __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
+  kmp_info_t *scan = (kmp_info_t *)__kmp_thread_pool;
+  kmp_info_t * prev = NULL;
+  for (; (scan != NULL) && (__kmp_root[scan->th.th_info.ds.ds_gtid] == NULL);
+         prev = scan, scan = scan->th.th_next_pool)
+    ;
+
+  if (scan != NULL) { /* found one thread in the pool who was also a root before */
+    if (scan == __kmp_thread_pool) __kmp_thread_pool = (volatile kmp_info_t *)scan->th.th_next_pool;
+    else {
+      prev->th.th_next_pool = scan->th.th_next_pool;
+    }
+    if (scan == __kmp_thread_pool_insert_pt) {
+      __kmp_thread_pool_insert_pt = NULL;
+    }
+
+    TCW_4(scan->th.th_in_pool, FALSE);
+    // Don't touch th_active_in_pool or th_active.
+    // The worker thread adjusts those flags as it sleeps/awakens.
+    __kmp_thread_pool_nth--;
+
+    from_thread_pool = 1;
+
+    root_thread = scan;
+    gtid = scan->th.th_info.ds.ds_gtid;
+    root = __kmp_root[gtid];
+    root_thread->th.root_counter++;
+  } else {
+    root = (kmp_root_t *) __kmp_allocate(sizeof(kmp_root_t));
+
+    if (__kmp_thread_pool) {
+
+      root_thread = CCAST(kmp_info_t *, __kmp_thread_pool);
+      __kmp_thread_pool = (volatile kmp_info_t *) root_thread->th.th_next_pool;
+      if (root_thread == __kmp_thread_pool_insert_pt) {
+        __kmp_thread_pool_insert_pt = NULL;
+      }
+      TCW_4(root_thread->th.th_in_pool, FALSE);
+      // Don't touch th_active_in_pool or th_active.
+      // The worker thread adjusts those flags as it sleeps/awakens.
+      __kmp_thread_pool_nth--;
+      gtid = root_thread->th.th_info.ds.ds_gtid;
+      root_thread->th.root_counter = 0;
+
+      KA_TRACE(20, ("__kmp_root_thread_create: T#%d using thread T#%d\n",
+              __kmp_get_gtid(), root_thread->th.th_info.ds.ds_gtid));
+      KMP_ASSERT(!root_thread->th.th_team);
+      KMP_DEBUG_ASSERT(__kmp_nth < __kmp_threads_capacity);
+      KMP_DEBUG_ASSERT(__kmp_thread_pool_nth >= 0);
+
+      KMP_DEBUG_ASSERT(root_thread->th.th_serial_team);
+
+      root_thread->th.th_task_state = 0;
+      root_thread->th.th_task_state_top = 0;
+      root_thread->th.th_task_state_stack_sz = 4;
+
+#ifdef KMP_ADJUST_BLOCKTIME
+      /* Adjust blocktime back to zero if necessary */
+      /* Middle initialization might not have occurred yet */
+      if (!__kmp_env_blocktime && (__kmp_avail_proc > 0)) {
+        if (__kmp_nth > __kmp_avail_proc) {
+          __kmp_zero_bt = TRUE;
+        }
+      }
+#endif /* KMP_ADJUST_BLOCKTIME */
+
+#if KMP_DEBUG
+      // If thread entered pool via __kmp_free_thread, wait_flag should !=
+      // KMP_BARRIER_PARENT_FLAG.
+      int b;
+      kmp_balign_t *balign = root_thread->th.th_bar;
+      for (b = 0; b < bs_last_barrier; ++b)
+        KMP_DEBUG_ASSERT(balign[b].bb.wait_flag != KMP_BARRIER_PARENT_FLAG);
+#endif
+
+      KF_TRACE(10, ("__kmp_root_thread_create: T#%d using thread %p T#%d\n",
+              __kmp_get_gtid(), root_thread, root_thread->th.th_info.ds.ds_gtid));
+
+      KMP_MB();
+
+      from_thread_pool = 2;
+    } else {
+      /* find the gtid first, and then allocate kmp_info_t thread object, and do
+       * initial initialization, and then create native thread for it
+       * see if there are too many threads */
+      if (__kmp_all_nth >= __kmp_threads_capacity && !__kmp_expand_threads(1)) {
+        if (__kmp_tp_cached) {
+          __kmp_msg(kmp_ms_warning, KMP_MSG(CantRegisterNewThread),
+                      KMP_HNT(Set_ALL_THREADPRIVATE, __kmp_tp_capacity),
+                      KMP_HNT(PossibleSystemLimitOnThreads), __kmp_msg_null);
+        } else {
+          __kmp_msg(kmp_ms_warning, KMP_MSG(CantRegisterNewThread), KMP_HNT(SystemLimitOnThreads),
+                      __kmp_msg_null);
+        }
+        return NULL; /* not able to create new threads */
+      }
+
+      /* find an available thread slot */
+      /* Don't reassign the zero slot since we need that to only be used by initial
+         thread */
+      for (gtid = 1; TCR_PTR(__kmp_threads[gtid]) != NULL; gtid++);
+      KA_TRACE(1,
+               ("__kmp_root_thread_create: found slot in threads array: T#%d\n", gtid));
+      KMP_ASSERT(gtid < __kmp_threads_capacity);
+
+      /* update global accounting */
+      __kmp_all_nth++;
+
+      // if __kmp_adjust_gtid_mode is set, then we use method #1 (sp search) for low
+      // numbers of procs, and method #2 (keyed API call) for higher numbers.
+      if (__kmp_adjust_gtid_mode) {
+        if (__kmp_all_nth >= __kmp_tls_gtid_min) {
+          if (TCR_4(__kmp_gtid_mode) != 2) {
+            TCW_4(__kmp_gtid_mode, 2);
+          }
+        } else {
+          if (TCR_4(__kmp_gtid_mode) != 1) {
+            TCW_4(__kmp_gtid_mode, 1);
+          }
+        }
+      }
+
+#ifdef KMP_ADJUST_BLOCKTIME
+      /* Adjust blocktime to zero if necessary            */
+      /* Middle initialization might not have occurred yet */
+      if (!__kmp_env_blocktime && (__kmp_avail_proc > 0)) {
+        if (__kmp_nth > __kmp_avail_proc) {
+          __kmp_zero_bt = TRUE;
+        }
+      }
+#endif /* KMP_ADJUST_BLOCKTIME */
+
+      /* create the thread_info */
+      root_thread = (kmp_info_t *) __kmp_allocate(sizeof(kmp_info_t));
+
+      if (__kmp_storage_map) {
+        __kmp_print_thread_storage_map(root_thread, gtid);
+      }
+      root_thread->th.th_info.ds.ds_gtid = gtid;
+
+#if OMPT_SUPPORT
+      root_thread->th.ompt_thread_info.thread_data.ptr = NULL;
+#endif
+      if (__kmp_env_consistency_check) {
+        root_thread->th.th_cons = __kmp_allocate_cons_stack(gtid);
+      }
+#if USE_FAST_MEMORY
+      __kmp_initialize_fast_memory(root_thread);
+#endif /* USE_FAST_MEMORY */
+
+#if KMP_USE_BGET
+      KMP_DEBUG_ASSERT(root_thread->th.th_local.bget_data == NULL);
+      __kmp_initialize_bget(root_thread);
+#endif
+      __kmp_init_random(root_thread); // Initialize random number generator
+
+      /* Initialize these only once when thread is grabbed for a team allocation */
+      KA_TRACE(20,
+               ("__kmp_root_thread_create: T#%d init go fork=%u, plain=%u\n",
+                       __kmp_get_gtid(), KMP_INIT_BARRIER_STATE, KMP_INIT_BARRIER_STATE));
+
+      int b;
+      kmp_balign_t *balign = root_thread->th.th_bar;
+      for (b = 0; b < bs_last_barrier; ++b) {
+        balign[b].bb.b_go = KMP_INIT_BARRIER_STATE;
+        balign[b].bb.team = NULL;
+        balign[b].bb.wait_flag = KMP_BARRIER_NOT_WAITING;
+        balign[b].bb.use_oncore_barrier = 0;
+      }
+
+      root_thread->th.th_spin_here = FALSE;
+      root_thread->th.th_next_waiting = 0;
+
+#if OMP_40_ENABLED && KMP_AFFINITY_SUPPORTED
+      root_thread->th.th_current_place = KMP_PLACE_UNDEFINED;
+  root_thread->th.th_new_place = KMP_PLACE_UNDEFINED;
+  root_thread->th.th_first_place = KMP_PLACE_UNDEFINED;
+  root_thread->th.th_last_place = KMP_PLACE_UNDEFINED;
+#endif
+
+      TCW_4(root_thread->th.th_in_pool, FALSE);
+      root_thread->th.th_active_in_pool = FALSE;
+      TCW_4(root_thread->th.th_active, TRUE);
+
+      /* setup the serial team held in reserve by the root thread */
+      kmp_internal_control_t r_icvs = __kmp_get_global_icvs();
+      KF_TRACE(10, ("__kmp_register_root: before serial_team\n"));
+      root_thread->th.th_serial_team =
+              __kmp_allocate_team(root, 1, 1,
+#if OMPT_SUPPORT
+                                  ompt_data_none, // root parallel id
+#endif
+#if OMP_40_ENABLED
+                                  proc_bind_default,
+#endif
+                                  &r_icvs, 0 USE_NESTED_HOT_ARG(NULL));
+
+      /* drop root_thread into place */
+      TCW_SYNC_PTR(__kmp_threads[gtid], root_thread);
+      root_thread->th.root_counter = 0;
+
+      from_thread_pool = 0;
+    }
+
+    __kmp_root[gtid] = root;
+  }
+
+  __kmp_initialize_root(root);
+  TCW_4(__kmp_nth, __kmp_nth + 1);
+
+  root_thread->th.th_root = root;
+  root->r.r_root_team->t.t_threads[0] = root_thread;
+  root->r.r_hot_team->t.t_threads[0] = root_thread;
+  root_thread->th.th_serial_team->t.t_threads[0] = root_thread;
+  // AC: the team created in reserve, not for execution (it is unused for now).
+  root_thread->th.th_serial_team->t.t_serialized = 0;
+
+  /* initialize the thread, get it ready to go */
+  __kmp_initialize_info(root_thread, root->r.r_root_team, 0, gtid);
+
+  __kmp_root_counter++;
+
+  __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
+
+  root_thread->th.root_thread_func = func;
+  root_thread->th.root_thread_arg = arg;
+
+  root->r.r_cg_nthreads = 1;
+  root->r.r_parent = parent_root;
+  root->r.r_uber_thread = parent_root->r.r_uber_thread;
+
+  rex_root_thread_t *state =
+          (rex_root_thread_t *) __kmp_allocate(sizeof(rex_root_thread_t));
+  state->return_value = NULL;
+  state->gtid = gtid;
+  state->finished = 0;
+  root_thread->th.current_root = state;
+  state->counter = root_thread->th.root_counter; /* this counter is useless so far */
+
+  if (from_thread_pool) {
+    __kmp_acquire_lock(&root_thread->th.rex_root_lock, gtid);
+    state->next = root_thread->th.unjoined_roots;
+    root_thread->th.unjoined_roots = state;
+    __kmp_release_lock(&root_thread->th.rex_root_lock, gtid);
+    /* now release the worker who is currently in the fork-barrier from the thread pool */
+    kmp_flag_64 flag(&root_thread->th.th_bar[bs_forkjoin_barrier].bb.b_go, root_thread);
+    flag.release();
+  } else {
+    state->next = NULL;
+    __kmp_init_lock(&root_thread->th.rex_root_lock);
+    /* create native thread and let it call to promote_root */
+    root_thread->th.unjoined_roots = state;
+    __kmp_create_worker(gtid, root_thread, __kmp_stksize);
+  }
+
+  printf("root thread %d:%d created with %d (0: natively created, 1: reuse previous root, 2: promote a worker to root\n", gtid, state->counter, from_thread_pool );
+  return state;
+
+#if 0
+  root_thread = __kmp_allocate_thread(root, root->r.r_root_team, 0); /* will use one from the thread pool or create one */
+  root_gtid = root_thread->th.th_info.ds.ds_gtid;
+  KMP_DEBUG_ASSERT(__kmp_root[root_gtid] == NULL);
+  __kmp_root[gtid] = root; /* install the root */
+#endif
+}
+
+/**
+ * set the return value of the current thread so thread_join can retrieve this value.
+ * @param retval
+ * @return
+ */
+void __kmpc_root_thread_set_retval(void * retval) {
+  int gtid = __kmp_get_global_thread_id();
+  kmp_info_t * thread = __kmp_threads[gtid];
+
+  rex_root_thread_t * current = thread->th.current_root;
+  if (current != NULL) {
+    current->return_value = retval;
+  }
+}
+
+/**
+ * join a root thread
+ * @param thread
+ * @param retval
+ * @return
+ */
+int __kmpc_root_thread_join(void * thread, void **retval) {
+  rex_root_thread_t * joinee= (rex_root_thread_t*)thread;
+  int gtid = joinee->gtid;
+  int this_gtid = __kmp_get_global_thread_id();
+  kmp_info_t *root_thread = __kmp_threads[gtid];
+  while (joinee->finished == 0);
+
+  /* find the thread state object (the thread itself) in the link list and remove it */
+  __kmp_acquire_lock(&root_thread->th.rex_root_lock, gtid);
+  rex_root_thread_t * cursor = root_thread->th.unjoined_roots;
+  rex_root_thread_t * prev = NULL;
+  while (cursor != joinee && cursor != NULL) {
+    prev = cursor;
+    cursor = cursor->next;
+  }
+  if (cursor == NULL) { /* already joined and deallocated */
+    __kmp_release_lock(&root_thread->th.rex_root_lock, gtid);
+    return -1; /* already joined before */
+  } else {
+    if (prev == NULL) {
+      root_thread->th.unjoined_roots = joinee->next;
+    } else {
+      prev->next = joinee->next;
+    }
+    __kmp_release_lock(&root_thread->th.rex_root_lock, gtid);
+  }
+
+  if (retval != NULL) *retval = joinee->return_value;
+  __kmp_free(joinee);
+  return 0;
+}
+
+/**
+ * attach the current user thread to the openmp runtime thread pool
+ *
+ * @return this function should not return. If it does, it means the thread is not able to attach
+ * to the thread pool.
+ */
+int __kmpc_native_thread_attach() {
+  int gtid;
+  if (__kmp_gtid_get_specific() == KMP_GTID_DNE) { /* check whether this thread is part of the runtime or not */
+    __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
+    /* find the gtid first, and then allocate kmp_info_t thread object, and do
+     * initial initialization, and then create native thread for it
+     * see if there are too many threads */
+    if (__kmp_all_nth >= __kmp_threads_capacity && !__kmp_expand_threads(1)) {
+      if (__kmp_tp_cached) {
+        __kmp_msg(kmp_ms_warning, KMP_MSG(CantRegisterNewThread),
+                  KMP_HNT(Set_ALL_THREADPRIVATE, __kmp_tp_capacity),
+                  KMP_HNT(PossibleSystemLimitOnThreads), __kmp_msg_null);
+      } else {
+        __kmp_msg(kmp_ms_warning, KMP_MSG(CantRegisterNewThread), KMP_HNT(SystemLimitOnThreads),
+                  __kmp_msg_null);
+      }
+      return -1; /* not able to attach new thread */
+    }
+
+    /* find an available thread slot */
+    /* Don't reassign the zero slot since we need that to only be used by initial
+       thread */
+    for (gtid = 1; TCR_PTR(__kmp_threads[gtid]) != NULL; gtid++);
+    KA_TRACE(1,
+             ("__kmp_root_thread_create: found slot in threads array: T#%d\n", gtid));
+    KMP_ASSERT(gtid < __kmp_threads_capacity);
+
+    /* update global accounting */
+    __kmp_all_nth++;
+
+    // if __kmp_adjust_gtid_mode is set, then we use method #1 (sp search) for low
+    // numbers of procs, and method #2 (keyed API call) for higher numbers.
+    if (__kmp_adjust_gtid_mode) {
+      if (__kmp_all_nth >= __kmp_tls_gtid_min) {
+        if (TCR_4(__kmp_gtid_mode) != 2) {
+          TCW_4(__kmp_gtid_mode, 2);
+        }
+      } else {
+        if (TCR_4(__kmp_gtid_mode) != 1) {
+          TCW_4(__kmp_gtid_mode, 1);
+        }
+      }
+    }
+
+#ifdef KMP_ADJUST_BLOCKTIME
+    /* Adjust blocktime to zero if necessary            */
+    /* Middle initialization might not have occurred yet */
+    if (!__kmp_env_blocktime && (__kmp_avail_proc > 0)) {
+      if (__kmp_nth > __kmp_avail_proc) {
+        __kmp_zero_bt = TRUE;
+      }
+    }
+#endif /* KMP_ADJUST_BLOCKTIME */
+
+    /* create the thread_info */
+    kmp_info_t * thinfo = (kmp_info_t *) __kmp_allocate(sizeof(kmp_info_t));
+
+    if (__kmp_storage_map) {
+      __kmp_print_thread_storage_map(thinfo, gtid);
+    }
+    thinfo->th.th_info.ds.ds_gtid = gtid;
+
+#if OMPT_SUPPORT
+    thinfo->th.ompt_thread_info.thread_data.ptr = NULL;
+#endif
+    if (__kmp_env_consistency_check) {
+      thinfo->th.th_cons = __kmp_allocate_cons_stack(gtid);
+    }
+#if USE_FAST_MEMORY
+    __kmp_initialize_fast_memory(thinfo);
+#endif /* USE_FAST_MEMORY */
+
+#if KMP_USE_BGET
+    KMP_DEBUG_ASSERT(thinfo->th.th_local.bget_data == NULL);
+    __kmp_initialize_bget(thinfo);
+#endif
+    __kmp_init_random(thinfo); // Initialize random number generator
+
+    /* setup the serial team held in reserve */
+    kmp_internal_control_t r_icvs = __kmp_get_global_icvs();
+    KF_TRACE(10, ("__kmp_register_root: before serial_team\n"));
+    thinfo->th.th_serial_team =
+            __kmp_allocate_team(__kmp_root[0], 1, 1,
+#if OMPT_SUPPORT
+                                ompt_data_none, // root parallel id
+#endif
+#if OMP_40_ENABLED
+                                proc_bind_default,
+#endif
+                                &r_icvs, 0 USE_NESTED_HOT_ARG(NULL));
+
+    /* drop thread into place */
+    TCW_SYNC_PTR(__kmp_threads[gtid], thinfo);
+    thinfo->th.root_counter = 0;
+
+    /** follow code adapted from free_thread */
+
+    // When moving thread to pool, switch thread to wait on own b_go flag, and
+    // uninitialized (NULL team).
+    int b;
+    kmp_balign_t *balign = thinfo->th.th_bar;
+    for (b = 0; b < bs_last_barrier; ++b) {
+      if (balign[b].bb.wait_flag == KMP_BARRIER_PARENT_FLAG)
+        balign[b].bb.wait_flag = KMP_BARRIER_SWITCH_TO_OWN_FLAG;
+      balign[b].bb.team = NULL;
+      balign[b].bb.leaf_kids = 0;
+    }
+    thinfo->th.th_task_state = 0;
+
+    /* put thread back on the free pool */
+    TCW_PTR(thinfo->th.th_team, NULL);
+    TCW_PTR(thinfo->th.th_root, NULL);
+    TCW_PTR(thinfo->th.th_dispatch, NULL); /* NOT NEEDED */
+    thinfo->th.th_current_task = NULL;
+
+    // If the __kmp_thread_pool_insert_pt is already past the new insert
+    // point, then we need to re-scan the entire list.
+    gtid = thinfo->th.th_info.ds.ds_gtid;
+    if (__kmp_thread_pool_insert_pt != NULL) {
+      KMP_DEBUG_ASSERT(__kmp_thread_pool != NULL);
+      if (__kmp_thread_pool_insert_pt->th.th_info.ds.ds_gtid > gtid) {
+        __kmp_thread_pool_insert_pt = NULL;
+      }
+    }
+
+    // Scan down the list to find the place to insert the thread.
+    // scan is the address of a link in the list, possibly the address of
+    // __kmp_thread_pool itself.
+    //
+    // In the absence of nested parallism, the for loop will have 0 iterations.
+    TCW_4(thinfo->th.th_in_pool, TRUE);
+    kmp_info_t **scan;
+    if (__kmp_thread_pool_insert_pt != NULL) {
+      scan = &(__kmp_thread_pool_insert_pt->th.th_next_pool);
+    } else {
+      scan = CCAST(kmp_info_t **, &__kmp_thread_pool);
+    }
+    for (; (*scan != NULL) && ((*scan)->th.th_info.ds.ds_gtid < gtid);
+           scan = &((*scan)->th.th_next_pool))
+      ;
+
+    // Insert the new element on the list, and set __kmp_thread_pool_insert_pt
+    // to its address.
+    TCW_PTR(thinfo->th.th_next_pool, *scan);
+    __kmp_thread_pool_insert_pt = *scan = thinfo;
+    KMP_DEBUG_ASSERT((thinfo->th.th_next_pool == NULL) ||
+                     (thinfo->th.th_info.ds.ds_gtid <
+                      thinfo->th.th_next_pool->th.th_info.ds.ds_gtid));
+    thinfo->th.th_active_in_pool = FALSE;
+    __kmp_thread_pool_nth++;
+
+#ifdef KMP_ADJUST_BLOCKTIME
+    /* Adjust blocktime back to user setting or default if necessary */
+    /* Middle initialization might never have occurred                */
+    if (!__kmp_env_blocktime && (__kmp_avail_proc > 0)) {
+      KMP_DEBUG_ASSERT(__kmp_avail_proc > 0);
+      if (__kmp_nth <= __kmp_avail_proc) {
+        __kmp_zero_bt = FALSE;
+      }
+    }
+#endif /* KMP_ADJUST_BLOCKTIME */
+    __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
+
+    __kmp_link_native(thinfo, 0); /* TODO: stack_size argument ignored for linux, but needed for windows so far */
+
+    thinfo->th.current_root = NULL;
+    thinfo->th.unjoined_roots = NULL;
+
+    __kmp_launch_worker(thinfo); /* enter the fork_join loop */
+
+  } else { /* this thread is already part of the runtime, ignore this request */
+  }
+}
+
+/**
+ * cool down the threads in the read/hot team by moving them to the thread pool
+ * this can only be called from a root thread in a sequential region
+ * @num_threads
+ * @return
+ */
+int __kmpc_cool_threads(int num_threads) {
+  int gtid = __kmp_get_global_thread_id();
+  kmp_info_t * thinfo = __kmp_threads[gtid];
+  kmp_root_t * root = thinfo->th.th_root;
+  kmp_info_t * root_thread = root->r.r_uber_thread;
+//  if (thinfo->th.th_root->r.)
+  if (thinfo == root_thread && __kmp_root[gtid] == root) {
+    /* code copied from reset root */
+    kmp_team_t *root_team = root->r.r_root_team;
+    kmp_team_t *hot_team = root->r.r_hot_team;
+    int n = hot_team->t.t_nproc;
+    int i;
+
+    KMP_DEBUG_ASSERT(!root->r.r_active);
+
+    //root->r.r_root_team = NULL;
+    //root->r.r_hot_team = NULL;
+    // __kmp_free_team() does not free hot teams, so we have to clear r_hot_team
+    // before call to __kmp_free_team().
+    __kmp_free_team(root, root_team USE_NESTED_HOT_ARG(NULL));
+#if KMP_NESTED_HOT_TEAMS
+    if (__kmp_hot_teams_max_level >
+        0) { // need to free nested hot teams and their threads if any
+      for (i = 0; i < hot_team->t.t_nproc; ++i) {
+        kmp_info_t *th = hot_team->t.t_threads[i];
+        if (__kmp_hot_teams_max_level > 1) {
+          n += __kmp_free_hot_teams(root, th, 1, __kmp_hot_teams_max_level);
+        }
+        if (th->th.th_hot_teams) {
+          //__kmp_free(th->th.th_hot_teams);
+          //th->th.th_hot_teams = NULL;
+        }
+      }
+    }
+#endif
+    __kmp_free_team(root, hot_team USE_NESTED_HOT_ARG(NULL));
+
+  }
+}
+#endif
