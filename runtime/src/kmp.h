@@ -1444,6 +1444,8 @@ typedef void *(*kmpc_cctor_vec)(void *, void *,
 /* keeps tracked of threadprivate cache allocations for cleanup later */
 typedef struct kmp_cached_addr {
   void **addr; /* address of allocated cache */
+  void ***compiler_cache; /* pointer to compiler's cache */
+  void *data; /* pointer to global data */
   struct kmp_cached_addr *next; /* pointer to next cached address */
 } kmp_cached_addr_t;
 
@@ -2788,6 +2790,7 @@ extern char const *__kmp_barrier_pattern_name[bp_last_bar];
 /* Global Locks */
 extern kmp_bootstrap_lock_t __kmp_initz_lock; /* control initialization */
 extern kmp_bootstrap_lock_t __kmp_forkjoin_lock; /* control fork/join access */
+extern kmp_bootstrap_lock_t __kmp_task_team_lock;
 extern kmp_bootstrap_lock_t
     __kmp_exit_lock; /* exit() is not always thread-safe */
 #if KMP_USE_MONITOR
@@ -2976,6 +2979,7 @@ extern kmp_info_t **__kmp_threads; /* Descriptors for the threads */
 /* read/write: lock */
 extern volatile kmp_team_t *__kmp_team_pool;
 extern volatile kmp_info_t *__kmp_thread_pool;
+extern kmp_info_t *__kmp_thread_pool_insert_pt;
 
 // total num threads reachable from some root thread including all root threads
 extern volatile int __kmp_nth;
@@ -3772,6 +3776,8 @@ void kmp_threadprivate_insert_private_data(int gtid, void *pc_addr,
 struct private_common *kmp_threadprivate_insert(int gtid, void *pc_addr,
                                                 void *data_addr,
                                                 size_t pc_size);
+void __kmp_threadprivate_resize_cache(int newCapacity);
+void __kmp_cleanup_threadprivate_caches();
 
 // ompc_, kmpc_ entries moved from omp.h.
 #if KMP_OS_WINDOWS
