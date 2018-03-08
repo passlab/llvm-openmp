@@ -5605,7 +5605,7 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
 restart_as_root:
 
     /* store it here as the promotion will reset them to NULL */
-    void (*root_thread_func)(void *) = this_thr->th.root_thread_func;
+    void * (*root_thread_func)(void *) = this_thr->th.root_thread_func;
     void * arg = this_thr->th.root_thread_arg;
     rex_root_thread_t * thread = this_thr->th.current_root;
 
@@ -7826,7 +7826,7 @@ kmp_int32 __kmp_get_reduce_method(void) {
  * leave with it.
  * @return
  */
-void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
+void * __kmpc_root_thread_create(void *(*func) (void * arg), void * arg) {
   int gtid = __kmp_get_global_thread_id_reg();
   kmp_root_t *parent_root;
 
