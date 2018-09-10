@@ -5607,7 +5607,7 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
 restart_as_root:
 
     /* store it here as the promotion will reset them to NULL */
-    void * (*root_thread_func)(void *) = this_thr->th.root_thread_func;
+    void (*root_thread_func)(void *) = this_thr->th.root_thread_func;
     void * arg = this_thr->th.root_thread_arg;
     rex_root_thread_t * thread = this_thr->th.current_root;
 
