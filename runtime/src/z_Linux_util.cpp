@@ -524,7 +524,13 @@ void *__kmp_launch_worker(void *thr) {
 #endif /* USE_ITT_BUILD */
 
 #if KMP_AFFINITY_SUPPORTED
+#if REX_KMP_SUPPORT
+  int isa_root = FALSE;
+  if (((kmp_info_t *)thr)->th.current_root) isa_root=TRUE;
+  __kmp_affinity_set_init_mask(gtid, isa_root);
+#else
   __kmp_affinity_set_init_mask(gtid, FALSE);
+#endif
 #endif
 
 #ifdef KMP_CANCEL_THREADS

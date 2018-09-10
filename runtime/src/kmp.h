@@ -2519,7 +2519,7 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 #endif
 
 #if REX_KMP_SUPPORT
-  void *(*root_thread_func)(void *arg);
+  void (*root_thread_func)(void *arg);
   void * root_thread_arg;
   int root_counter; /* the sequence id for being a root in the lift of this thread */
   kmp_lock_t rex_root_lock; /* lock for mutex access to the root_thread_states link list */
@@ -3547,7 +3547,7 @@ extern int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int npr, int argc,
 
 /* ------------------------------------------------------------------------ */
 #if REX_KMP_SUPPORT
-KMP_EXPORT void * __kmpc_root_thread_create(void * (*func) (void * arg), void * arg);
+KMP_EXPORT void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg);
 KMP_EXPORT int  __kmpc_root_thread_join(void * thread, void ** retval);
 KMP_EXPORT void __kmpc_root_thread_set_retval(void * retval);
 KMP_EXPORT int __kmpc_native_thread_attach();

@@ -3911,7 +3911,9 @@ static int __kmp_reset_root(int gtid, kmp_root_t *root) {
   if (root_thread->th.current_root != NULL) { /* this was a root thread and being put back */
     //free a root thread by putting it to the pool
     root_thread->th.current_root = NULL;
+    __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
     __kmp_free_thread(root_thread); /* put the thread back to the pool */
+    __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
   } else {
     TCW_4(__kmp_nth, __kmp_nth - 1); // __kmp_reap_thread will decrement __kmp_all_nth.
     root->r.r_cg_nthreads--;
@@ -7826,7 +7828,7 @@ kmp_int32 __kmp_get_reduce_method(void) {
  * leave with it.
  * @return
  */
-void * __kmpc_root_thread_create(void *(*func) (void * arg), void * arg) {
+void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
   int gtid = __kmp_get_global_thread_id_reg();
   kmp_root_t *parent_root;
 
@@ -8102,7 +8104,7 @@ void * __kmpc_root_thread_create(void *(*func) (void * arg), void * arg) {
     __kmp_create_worker(gtid, root_thread, __kmp_stksize);
   }
 
-  printf("root thread %d:%d created with %d (0: natively created, 1: reuse previous root, 2: promote a worker to root\n", gtid, state->counter, from_thread_pool );
+  //printf("root thread %d:%d created with %d (0: natively created, 1: reuse previous root, 2: promote a worker to root\n", gtid, state->counter, from_thread_pool );
   return state;
 
 #if 0
