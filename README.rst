@@ -194,7 +194,7 @@ Optional Features
 **LIBOMP_OMPT_SUPPORT** = ``ON|OFF``
   Include support for the OpenMP Tools Interface (OMPT). 
   This option is supported and ``ON`` by default for x86, x86_64, AArch64, and 
-  PPC64 on Linux*, Windows*, and macOS*.
+  PPC64 on Linux* and macOS*.
   This option is ``OFF`` if this feature is not supported for the platform.
 
 **LIBOMP_OMPT_OPTIONAL** = ``ON|OFF``
@@ -257,9 +257,11 @@ Options for ``libomptarget``
 Options for ``NVPTX device RTL``
 --------------------------------
 
-**LIBOMPTARGET_NVPTX_ENABLE_BCLIB** = ``OFF|ON``
+**LIBOMPTARGET_NVPTX_ENABLE_BCLIB** = ``ON|OFF``
   Enable CUDA LLVM bitcode offloading device RTL. This is used for link time
-  optimization of the OMP runtime and application code.
+  optimization of the OMP runtime and application code. This option is enabled
+  by default if the build system determines that `CMAKE_C_COMPILER` is able to
+  compile and link the library.
 
 **LIBOMPTARGET_NVPTX_CUDA_COMPILER** = ``""``
   Location of a CUDA compiler capable of emitting LLVM bitcode. Currently only

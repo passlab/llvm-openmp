@@ -48,7 +48,7 @@ enum tgt_map_type {
   OMP_TGT_MAPTYPE_LITERAL         = 0x100,
   // mapping is implicit
   OMP_TGT_MAPTYPE_IMPLICIT        = 0x200,
-  // member of struct, member given by 16 MSBs - 1
+  // member of struct, member given by [16 MSBs] - 1
   OMP_TGT_MAPTYPE_MEMBER_OF       = 0xffff000000000000
 };
 
@@ -98,10 +98,6 @@ struct __tgt_target_table {
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Implemented in libomp, they are called from within __tgt_* functions.
-int omp_get_default_device(void) __attribute__((weak));
-int32_t __kmpc_omp_taskwait(void *loc_ref, int32_t gtid) __attribute__((weak));
 
 int omp_get_num_devices(void);
 int omp_get_initial_device(void);

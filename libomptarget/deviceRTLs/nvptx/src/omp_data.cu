@@ -14,6 +14,12 @@
 #include "omptarget-nvptx.h"
 
 ////////////////////////////////////////////////////////////////////////////////
+// global device envrionment
+////////////////////////////////////////////////////////////////////////////////
+
+__device__ omptarget_device_environmentTy omptarget_device_environment;
+
+////////////////////////////////////////////////////////////////////////////////
 // global data holding OpenMP state information
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -21,9 +27,16 @@ __device__
     omptarget_nvptx_Queue<omptarget_nvptx_ThreadPrivateContext, OMP_STATE_COUNT>
         omptarget_nvptx_device_State[MAX_SM];
 
+__device__ omptarget_nvptx_Queue<omptarget_nvptx_SimpleThreadPrivateContext,
+                                 OMP_STATE_COUNT>
+    omptarget_nvptx_device_simpleState[MAX_SM];
+
 // Pointer to this team's OpenMP state object
 __device__ __shared__
     omptarget_nvptx_ThreadPrivateContext *omptarget_nvptx_threadPrivateContext;
+
+__device__ __shared__ omptarget_nvptx_SimpleThreadPrivateContext
+    *omptarget_nvptx_simpleThreadPrivateContext;
 
 ////////////////////////////////////////////////////////////////////////////////
 // The team master sets the outlined parallel function in this variable to
@@ -46,3 +59,8 @@ __device__ __shared__ DataSharingStateTy DataSharingState;
 // Scratchpad for teams reduction.
 ////////////////////////////////////////////////////////////////////////////////
 __device__ __shared__ void *ReductionScratchpadPtr;
+
+////////////////////////////////////////////////////////////////////////////////
+// Data sharing related variables.
+////////////////////////////////////////////////////////////////////////////////
+__device__ __shared__ omptarget_nvptx_SharedArgs omptarget_nvptx_globalArgs;
