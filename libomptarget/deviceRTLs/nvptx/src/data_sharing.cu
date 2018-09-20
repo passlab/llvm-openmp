@@ -19,6 +19,8 @@ __device__ static unsigned getNumThreads() { return blockDim.x; }
 __device__ static unsigned getThreadId() { return threadIdx.x; }
 // Warp ID in the CUDA block
 __device__ static unsigned getWarpId() { return threadIdx.x / WARPSIZE; }
+// Lane ID in the CUDA warp.
+__device__ static unsigned getLaneId() { return threadIdx.x % WARPSIZE; }
 
 // The CUDA thread ID of the master thread.
 __device__ static unsigned getMasterThreadId() {
@@ -37,11 +39,12 @@ __device__ static bool IsWarpMasterActiveThread() {
   unsigned long long Mask = getActiveThreadsMask();
   unsigned long long ShNum = WARPSIZE - (getThreadId() % WARPSIZE);
   unsigned long long Sh = Mask << ShNum;
-  return Sh == 0;
+  // Truncate Sh to the 32 lower bits
+  return (unsigned)Sh == 0;
 }
 // Return true if this is the master thread.
 __device__ static bool IsMasterThread() {
-  return getMasterThreadId() == getThreadId();
+  return !isSPMDMode() && getMasterThreadId() == getThreadId();
 }
 
 /// Return the provided size aligned to the size of a pointer.
@@ -76,7 +79,7 @@ __device__ static size_t AlignVal(size_t Val) {
 EXTERN void
 __kmpc_initialize_data_sharing_environment(__kmpc_data_sharing_slot *rootS,
                                            size_t InitialDataSize) {
-
+  ASSERT0(LT_FUSSY, isRuntimeInitialized(), "Runtime must be initialized.");
   DSPRINT0(DSFLAG_INIT,
            "Entering __kmpc_initialize_data_sharing_environment\n");
 
@@ -85,7 +88,7 @@ __kmpc_initialize_data_sharing_environment(__kmpc_data_sharing_slot *rootS,
 
   omptarget_nvptx_TeamDescr *teamDescr =
       &omptarget_nvptx_threadPrivateContext->TeamContext();
-  __kmpc_data_sharing_slot *RootS = teamDescr->RootS(WID);
+  __kmpc_data_sharing_slot *RootS = teamDescr->RootS(WID, IsMasterThread());
 
   DataSharingState.SlotPtr[WID] = RootS;
   DataSharingState.StackPtr[WID] = (void *)&RootS->Data[0];
@@ -321,4 +324,193 @@ __kmpc_get_data_sharing_environment_frame(int32_t SourceThreadID,
   void *P = DataSharingState.FramePtr[SourceWID];
   DSPRINT0(DSFLAG, "Exiting __kmpc_get_data_sharing_environment_frame\n");
   return P;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Runtime functions for trunk data sharing scheme.
+////////////////////////////////////////////////////////////////////////////////
+
+INLINE void data_sharing_init_stack_common() {
+  ASSERT0(LT_FUSSY, isRuntimeInitialized(), "Runtime must be initialized.");
+  omptarget_nvptx_TeamDescr *teamDescr =
+      &omptarget_nvptx_threadPrivateContext->TeamContext();
+
+  for (int WID = 0; WID < WARPSIZE; WID++) {
+    __kmpc_data_sharing_slot *RootS = teamDescr->GetPreallocatedSlotAddr(WID);
+    DataSharingState.SlotPtr[WID] = RootS;
+    DataSharingState.StackPtr[WID] = (void *)&RootS->Data[0];
+  }
+}
+
+// Initialize data sharing data structure. This function needs to be called
+// once at the beginning of a data sharing context (coincides with the kernel
+// initialization). This function is called only by the MASTER thread of each
+// team in non-SPMD mode.
+EXTERN void __kmpc_data_sharing_init_stack() {
+  ASSERT0(LT_FUSSY, isRuntimeInitialized(), "Runtime must be initialized.");
+  // This function initializes the stack pointer with the pointer to the
+  // statically allocated shared memory slots. The size of a shared memory
+  // slot is pre-determined to be 256 bytes.
+  data_sharing_init_stack_common();
+  omptarget_nvptx_globalArgs.Init();
+}
+
+// Initialize data sharing data structure. This function needs to be called
+// once at the beginning of a data sharing context (coincides with the kernel
+// initialization). This function is called in SPMD mode only.
+EXTERN void __kmpc_data_sharing_init_stack_spmd() {
+  ASSERT0(LT_FUSSY, isRuntimeInitialized(), "Runtime must be initialized.");
+  // This function initializes the stack pointer with the pointer to the
+  // statically allocated shared memory slots. The size of a shared memory
+  // slot is pre-determined to be 256 bytes.
+  if (threadIdx.x == 0)
+    data_sharing_init_stack_common();
+
+  __threadfence_block();
+}
+
+// Called at the time of the kernel initialization. This is used to initilize
+// the list of references to shared variables and to pre-allocate global storage
+// for holding the globalized variables.
+//
+// By default the globalized variables are stored in global memory. If the
+// UseSharedMemory is set to true, the runtime will attempt to use shared memory
+// as long as the size requested fits the pre-allocated size.
+EXTERN void* __kmpc_data_sharing_push_stack(size_t DataSize,
+    int16_t UseSharedMemory) {
+  // Frame pointer must be visible to all workers in the same warp.
+  unsigned WID = getWarpId();
+  void *&FrameP = DataSharingState.FramePtr[WID];
+
+  // Only warp active master threads manage the stack.
+  if (IsWarpMasterActiveThread()) {
+    // SlotP will point to either the shared memory slot or an existing
+    // global memory slot.
+    __kmpc_data_sharing_slot *&SlotP = DataSharingState.SlotPtr[WID];
+    void *&StackP = DataSharingState.StackPtr[WID];
+
+    // Compute the total memory footprint of the requested data.
+    // The master thread requires a stack only for itself. A worker
+    // thread (which at this point is a warp master) will require
+    // space for the variables of each thread in the warp,
+    // i.e. one DataSize chunk per warp lane.
+    // TODO: change WARPSIZE to the number of active threads in the warp.
+    size_t PushSize = IsMasterThread() ? DataSize : WARPSIZE * DataSize;
+
+    // Check if we have room for the data in the current slot.
+    const uintptr_t StartAddress = (uintptr_t)StackP;
+    const uintptr_t EndAddress = (uintptr_t)SlotP->DataEnd;
+    const uintptr_t RequestedEndAddress = StartAddress + (uintptr_t)PushSize;
+
+    // If we requested more data than there is room for in the rest
+    // of the slot then we need to either re-use the next slot, if one exists,
+    // or create a new slot.
+    if (EndAddress < RequestedEndAddress) {
+      __kmpc_data_sharing_slot *NewSlot = 0;
+      size_t NewSize = PushSize;
+
+      // Allocate at least the default size for each type of slot.
+      // Master is a special case and even though there is only one thread,
+      // it can share more things with the workers. For uniformity, it uses
+      // the full size of a worker warp slot.
+      size_t DefaultSlotSize = DS_Worker_Warp_Slot_Size;
+      if (DefaultSlotSize > NewSize)
+        NewSize = DefaultSlotSize;
+      NewSlot = (__kmpc_data_sharing_slot *) SafeMalloc(
+          sizeof(__kmpc_data_sharing_slot) + NewSize,
+          "Global memory slot allocation.");
+
+      NewSlot->Next = 0;
+      NewSlot->Prev = SlotP;
+      NewSlot->PrevSlotStackPtr = StackP;
+      NewSlot->DataEnd = &NewSlot->Data[0] + NewSize;
+
+      // Make previous slot point to the newly allocated slot.
+      SlotP->Next = NewSlot;
+      // The current slot becomes the new slot.
+      SlotP = NewSlot;
+      // The stack pointer always points to the next free stack frame.
+      StackP = &NewSlot->Data[0] + PushSize;
+      // The frame pointer always points to the beginning of the frame.
+      FrameP = &NewSlot->Data[0];
+    } else {
+      // Add the data chunk to the current slot. The frame pointer is set to
+      // point to the start of the new frame held in StackP.
+      FrameP = StackP;
+      // Reset stack pointer to the requested address.
+      StackP = (void *)RequestedEndAddress;
+    }
+  }
+
+  __threadfence_block();
+
+  // Compute the start address of the frame of each thread in the warp.
+  uintptr_t FrameStartAddress = (uintptr_t)FrameP;
+  FrameStartAddress += (uintptr_t) (getLaneId() * DataSize);
+  return (void *)FrameStartAddress;
+}
+
+// Pop the stack and free any memory which can be reclaimed.
+//
+// When the pop operation removes the last global memory slot,
+// reclaim all outstanding global memory slots since it is
+// likely we have reached the end of the kernel.
+EXTERN void __kmpc_data_sharing_pop_stack(void *FrameStart) {
+  if (IsWarpMasterActiveThread()) {
+    unsigned WID = getWarpId();
+
+    // Current slot
+    __kmpc_data_sharing_slot *&SlotP = DataSharingState.SlotPtr[WID];
+
+    // Pointer to next available stack.
+    void *&StackP = DataSharingState.StackPtr[WID];
+
+    // If the current slot is empty, we need to free the slot after the
+    // pop.
+    bool SlotEmpty = (StackP == &SlotP->Data[0]);
+
+    // Pop the frame.
+    StackP = FrameStart;
+
+    if (SlotEmpty && SlotP->Prev) {
+      // Before removing the slot we need to reset StackP.
+      StackP = SlotP->PrevSlotStackPtr;
+
+      // Remove the slot.
+      SlotP = SlotP->Prev;
+      SafeFree(SlotP->Next, "Free slot.");
+      SlotP->Next = 0;
+    }
+  }
+
+  __threadfence_block();
+}
+
+// Begin a data sharing context. Maintain a list of references to shared
+// variables. This list of references to shared variables will be passed
+// to one or more threads.
+// In L0 data sharing this is called by master thread.
+// In L1 data sharing this is called by active warp master thread.
+EXTERN void __kmpc_begin_sharing_variables(void ***GlobalArgs, size_t nArgs) {
+  omptarget_nvptx_globalArgs.EnsureSize(nArgs);
+  *GlobalArgs = omptarget_nvptx_globalArgs.GetArgs();
+}
+
+// End a data sharing context. There is no need to have a list of refs
+// to shared variables because the context in which those variables were
+// shared has now ended. This should clean-up the list of references only
+// without affecting the actual global storage of the variables.
+// In L0 data sharing this is called by master thread.
+// In L1 data sharing this is called by active warp master thread.
+EXTERN void __kmpc_end_sharing_variables() {
+  omptarget_nvptx_globalArgs.DeInit();
+}
+
+// This function will return a list of references to global variables. This
+// is how the workers will get a reference to the globalized variable. The
+// members of this list will be passed to the outlined parallel function
+// preserving the order.
+// Called by all workers.
+EXTERN void __kmpc_get_shared_variables(void ***GlobalArgs) {
+  *GlobalArgs = omptarget_nvptx_globalArgs.GetArgs();
 }

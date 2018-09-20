@@ -19,12 +19,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <inttypes.h>
+
 // cuda includes
 #include <cuda.h>
 #include <math.h>
 
 // local includes
-#include "counter_group.h"
 #include "debug.h"     // debug
 #include "interface.h" // interfaces with omp, compiler, and user
 #include "option.h"    // choices we have
@@ -62,6 +63,46 @@
 #define __ACTIVEMASK() __ballot(1)
 #endif
 
+// arguments needed for L0 parallelism only.
+class omptarget_nvptx_SharedArgs {
+public:
+  // All these methods must be called by the master thread only.
+  INLINE void Init() {
+    args  = buffer;
+    nArgs = MAX_SHARED_ARGS;
+  }
+  INLINE void DeInit() {
+    // Free any memory allocated for outlined parallel function with a large
+    // number of arguments.
+    if (nArgs > MAX_SHARED_ARGS) {
+      SafeFree(args, (char *)"new extended args");
+      Init();
+    }
+  }
+  INLINE void EnsureSize(size_t size) {
+    if (size > nArgs) {
+      if (nArgs > MAX_SHARED_ARGS) {
+        SafeFree(args, (char *)"new extended args");
+      }
+      args = (void **) SafeMalloc(size * sizeof(void *),
+                                  (char *)"new extended args");
+      nArgs = size;
+    }
+  }
+  // Called by all threads.
+  INLINE void **GetArgs() { return args; };
+private:
+  // buffer of pre-allocated arguments.
+  void *buffer[MAX_SHARED_ARGS];
+  // pointer to arguments buffer.
+  // starts off as a pointer to 'buffer' but can be dynamically allocated.
+  void **args;
+  // starts off as MAX_SHARED_ARGS but can increase in size.
+  uint32_t nArgs;
+};
+
+extern __device__ __shared__ omptarget_nvptx_SharedArgs omptarget_nvptx_globalArgs;
+
 // Data sharing related quantities, need to match what is used in the compiler.
 enum DATA_SHARING_SIZES {
   // The maximum number of workers in a kernel.
@@ -87,6 +128,8 @@ struct DataSharingStateTy {
 // size of 4*32 bytes.
 struct __kmpc_data_sharing_worker_slot_static {
   __kmpc_data_sharing_slot *Next;
+  __kmpc_data_sharing_slot *Prev;
+  void *PrevSlotStackPtr;
   void *DataEnd;
   char Data[DS_Worker_Warp_Slot_Size];
 };
@@ -94,6 +137,8 @@ struct __kmpc_data_sharing_worker_slot_static {
 // size of 4 bytes.
 struct __kmpc_data_sharing_master_slot_static {
   __kmpc_data_sharing_slot *Next;
+  __kmpc_data_sharing_slot *Prev;
+  void *PrevSlotStackPtr;
   void *DataEnd;
   char Data[DS_Slot_Size];
 };
@@ -107,27 +152,27 @@ public:
   // methods for flags
   INLINE omp_sched_t GetRuntimeSched();
   INLINE void SetRuntimeSched(omp_sched_t sched);
-  INLINE int IsDynamic() { return data.items.flags & TaskDescr_IsDynamic; }
+  INLINE int IsDynamic() { return items.flags & TaskDescr_IsDynamic; }
   INLINE void SetDynamic() {
-    data.items.flags = data.items.flags | TaskDescr_IsDynamic;
+    items.flags = items.flags | TaskDescr_IsDynamic;
   }
   INLINE void ClearDynamic() {
-    data.items.flags = data.items.flags & (~TaskDescr_IsDynamic);
+    items.flags = items.flags & (~TaskDescr_IsDynamic);
   }
-  INLINE int InParallelRegion() { return data.items.flags & TaskDescr_InPar; }
+  INLINE int InParallelRegion() { return items.flags & TaskDescr_InPar; }
   INLINE int InL2OrHigherParallelRegion() {
-    return data.items.flags & TaskDescr_InParL2P;
+    return items.flags & TaskDescr_InParL2P;
   }
   INLINE int IsParallelConstruct() {
-    return data.items.flags & TaskDescr_IsParConstr;
+    return items.flags & TaskDescr_IsParConstr;
   }
   INLINE int IsTaskConstruct() { return !IsParallelConstruct(); }
   // methods for other fields
-  INLINE uint16_t &NThreads() { return data.items.nthreads; }
-  INLINE uint16_t &ThreadLimit() { return data.items.threadlimit; }
-  INLINE uint16_t &ThreadId() { return data.items.threadId; }
-  INLINE uint16_t &ThreadsInTeam() { return data.items.threadsInTeam; }
-  INLINE uint64_t &RuntimeChunkSize() { return data.items.runtimeChunkSize; }
+  INLINE uint16_t &NThreads() { return items.nthreads; }
+  INLINE uint16_t &ThreadLimit() { return items.threadlimit; }
+  INLINE uint16_t &ThreadId() { return items.threadId; }
+  INLINE uint16_t &ThreadsInTeam() { return items.threadsInTeam; }
+  INLINE uint64_t &RuntimeChunkSize() { return items.runtimeChunkSize; }
   INLINE omptarget_nvptx_TaskDescr *GetPrevTaskDescr() { return prev; }
   INLINE void SetPrevTaskDescr(omptarget_nvptx_TaskDescr *taskDescr) {
     prev = taskDescr;
@@ -145,6 +190,8 @@ public:
   INLINE void CopyFromWorkDescr(omptarget_nvptx_TaskDescr *workTaskDescr);
   INLINE void CopyConvergentParent(omptarget_nvptx_TaskDescr *parentTaskDescr,
                                    uint16_t tid, uint16_t tnum);
+  INLINE void SaveLoopData();
+  INLINE void RestoreLoopData() const;
 
 private:
   // bits for flags: (7 used, 1 free)
@@ -160,18 +207,23 @@ private:
   static const uint8_t TaskDescr_IsParConstr = 0x20;
   static const uint8_t TaskDescr_InParL2P = 0x40;
 
-  union { // both have same size
-    uint64_t vect[2];
-    struct TaskDescr_items {
-      uint8_t flags; // 6 bit used (see flag above)
-      uint8_t unused;
-      uint16_t nthreads;         // thread num for subsequent parallel regions
-      uint16_t threadlimit;      // thread limit ICV
-      uint16_t threadId;         // thread id
-      uint16_t threadsInTeam;    // threads in current team
-      uint64_t runtimeChunkSize; // runtime chunk size
-    } items;
-  } data;
+  struct SavedLoopDescr_items {
+    int64_t loopUpperBound;
+    int64_t nextLowerBound;
+    int64_t chunk;
+    int64_t stride;
+    kmp_sched_t schedule;
+  } loopData;
+
+  struct TaskDescr_items {
+    uint8_t flags; // 6 bit used (see flag above)
+    uint8_t unused;
+    uint16_t nthreads;         // thread num for subsequent parallel regions
+    uint16_t threadlimit;      // thread limit ICV
+    uint16_t threadId;         // thread id
+    uint16_t threadsInTeam;    // threads in current team
+    uint64_t runtimeChunkSize; // runtime chunk size
+  } items;
   omptarget_nvptx_TaskDescr *prev;
 };
 
@@ -189,15 +241,10 @@ class omptarget_nvptx_WorkDescr {
 
 public:
   // access to data
-  INLINE omptarget_nvptx_CounterGroup &CounterGroup() { return cg; }
   INLINE omptarget_nvptx_TaskDescr *WorkTaskDescr() { return &masterTaskICV; }
-  // init
-  INLINE void InitWorkDescr();
 
 private:
-  omptarget_nvptx_CounterGroup cg; // for barrier (no other needed)
   omptarget_nvptx_TaskDescr masterTaskICV;
-  bool hasCancel;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -217,23 +264,44 @@ public:
   // init
   INLINE void InitTeamDescr();
 
-  INLINE __kmpc_data_sharing_slot *RootS(int wid) {
+  INLINE __kmpc_data_sharing_slot *RootS(int wid, bool IsMasterThread) {
     // If this is invoked by the master thread of the master warp then intialize
     // it with a smaller slot.
-    if (wid == WARPSIZE - 1) {
+    if (IsMasterThread) {
+      // Do not initalize this slot again if it has already been initalized.
+      if (master_rootS[0].DataEnd == &master_rootS[0].Data[0] + DS_Slot_Size)
+        return 0;
       // Initialize the pointer to the end of the slot given the size of the
       // data section. DataEnd is non-inclusive.
       master_rootS[0].DataEnd = &master_rootS[0].Data[0] + DS_Slot_Size;
       // We currently do not have a next slot.
       master_rootS[0].Next = 0;
+      master_rootS[0].Prev = 0;
+      master_rootS[0].PrevSlotStackPtr = 0;
       return (__kmpc_data_sharing_slot *)&master_rootS[0];
     }
+    // Do not initalize this slot again if it has already been initalized.
+    if (worker_rootS[wid].DataEnd ==
+        &worker_rootS[wid].Data[0] + DS_Worker_Warp_Slot_Size)
+      return 0;
     // Initialize the pointer to the end of the slot given the size of the data
     // section. DataEnd is non-inclusive.
     worker_rootS[wid].DataEnd =
         &worker_rootS[wid].Data[0] + DS_Worker_Warp_Slot_Size;
     // We currently do not have a next slot.
     worker_rootS[wid].Next = 0;
+    worker_rootS[wid].Prev = 0;
+    worker_rootS[wid].PrevSlotStackPtr = 0;
+    return (__kmpc_data_sharing_slot *)&worker_rootS[wid];
+  }
+
+  INLINE __kmpc_data_sharing_slot *GetPreallocatedSlotAddr(int wid) {
+    worker_rootS[wid].DataEnd =
+        &worker_rootS[wid].Data[0] + DS_Worker_Warp_Slot_Size;
+    // We currently do not have a next slot.
+    worker_rootS[wid].Next = 0;
+    worker_rootS[wid].Prev = 0;
+    worker_rootS[wid].PrevSlotStackPtr = 0;
     return (__kmpc_data_sharing_slot *)&worker_rootS[wid];
   }
 
@@ -246,7 +314,7 @@ private:
   uint64_t lastprivateIterBuffer;
 
   __align__(16)
-      __kmpc_data_sharing_worker_slot_static worker_rootS[WARPSIZE - 1];
+      __kmpc_data_sharing_worker_slot_static worker_rootS[WARPSIZE];
   __align__(16) __kmpc_data_sharing_master_slot_static master_rootS[1];
 };
 
@@ -273,23 +341,12 @@ public:
   INLINE uint16_t &SimdLimitForNextSimd(int tid) {
     return nextRegion.slim[tid];
   }
-  // sync
-  INLINE Counter &Priv(int tid) { return priv[tid]; }
-  INLINE void IncrementPriv(int tid, Counter val) { priv[tid] += val; }
   // schedule (for dispatch)
   INLINE kmp_sched_t &ScheduleType(int tid) { return schedule[tid]; }
   INLINE int64_t &Chunk(int tid) { return chunk[tid]; }
   INLINE int64_t &LoopUpperBound(int tid) { return loopUpperBound[tid]; }
-  // state for dispatch with dyn/guided
-  INLINE Counter &CurrentEvent(int tid) {
-    return currEvent_or_nextLowerBound[tid];
-  }
-  INLINE Counter &EventsNumber(int tid) { return eventsNum_or_stride[tid]; }
-  // state for dispatch with static
-  INLINE Counter &NextLowerBound(int tid) {
-    return currEvent_or_nextLowerBound[tid];
-  }
-  INLINE Counter &Stride(int tid) { return eventsNum_or_stride[tid]; }
+  INLINE int64_t &NextLowerBound(int tid) { return nextLowerBound[tid]; }
+  INLINE int64_t &Stride(int tid) { return stride[tid]; }
 
   INLINE omptarget_nvptx_TeamDescr &TeamContext() { return teamContext; }
 
@@ -311,18 +368,61 @@ private:
     // simd limit
     uint16_t slim[MAX_THREADS_PER_TEAM];
   } nextRegion;
-  // sync
-  Counter priv[MAX_THREADS_PER_TEAM];
   // schedule (for dispatch)
   kmp_sched_t schedule[MAX_THREADS_PER_TEAM]; // remember schedule type for #for
   int64_t chunk[MAX_THREADS_PER_TEAM];
   int64_t loopUpperBound[MAX_THREADS_PER_TEAM];
   // state for dispatch with dyn/guided OR static (never use both at a time)
-  Counter currEvent_or_nextLowerBound[MAX_THREADS_PER_TEAM];
-  Counter eventsNum_or_stride[MAX_THREADS_PER_TEAM];
+  int64_t nextLowerBound[MAX_THREADS_PER_TEAM];
+  int64_t stride[MAX_THREADS_PER_TEAM];
   // Queue to which this object must be returned.
   uint64_t SourceQueue;
 };
+
+/// Device envrionment data
+struct omptarget_device_environmentTy {
+  int32_t debug_level;
+};
+
+class omptarget_nvptx_SimpleThreadPrivateContext {
+  uint16_t par_level[MAX_THREADS_PER_TEAM];
+public:
+  INLINE void Init() {
+    ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
+            "Expected SPMD + uninitialized runtime modes.");
+    par_level[GetThreadIdInBlock()] = 0;
+  }
+  INLINE void IncParLevel() {
+    ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
+            "Expected SPMD + uninitialized runtime modes.");
+    ++par_level[GetThreadIdInBlock()];
+  }
+  INLINE void DecParLevel() {
+    ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
+            "Expected SPMD + uninitialized runtime modes.");
+    ASSERT0(LT_FUSSY, par_level[GetThreadIdInBlock()] > 0,
+            "Expected parallel level >0.");
+    --par_level[GetThreadIdInBlock()];
+  }
+  INLINE bool InL2OrHigherParallelRegion() const {
+    ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
+            "Expected SPMD + uninitialized runtime modes.");
+    return par_level[GetThreadIdInBlock()] > 0;
+  }
+  INLINE uint16_t GetParallelLevel() const {
+    ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
+            "Expected SPMD + uninitialized runtime modes.");
+    return par_level[GetThreadIdInBlock()] + 1;
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// global device envrionment
+////////////////////////////////////////////////////////////////////////////////
+
+extern __device__ omptarget_device_environmentTy omptarget_device_environment;
+
+////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 // global data tables
@@ -330,6 +430,9 @@ private:
 
 extern __device__ __shared__
     omptarget_nvptx_ThreadPrivateContext *omptarget_nvptx_threadPrivateContext;
+extern __device__ __shared__ omptarget_nvptx_SimpleThreadPrivateContext
+    *omptarget_nvptx_simpleThreadPrivateContext;
+
 extern __device__ __shared__ uint32_t execution_param;
 extern __device__ __shared__ void *ReductionScratchpadPtr;
 
@@ -355,7 +458,6 @@ INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor(int globalThreadId);
 // inlined implementation
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "counter_groupi.h"
 #include "omptarget-nvptxi.h"
 #include "supporti.h"
 
