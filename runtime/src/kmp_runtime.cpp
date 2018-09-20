@@ -7828,7 +7828,7 @@ kmp_int32 __kmp_get_reduce_method(void) {
  * leave with it.
  * @return
  */
-void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
+int __kmpc_root_thread_create(void * thread, void (*func) (void * arg), void * arg) {
   int gtid = __kmp_get_global_thread_id_reg();
   kmp_root_t *parent_root;
 
@@ -7943,7 +7943,8 @@ void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
           __kmp_msg(kmp_ms_warning, KMP_MSG(CantRegisterNewThread), KMP_HNT(SystemLimitOnThreads),
                       __kmp_msg_null);
         }
-        return NULL; /* not able to create new threads */
+        thread = NULL;
+        return -1; /* not able to create new threads */
       }
 
       /* find an available thread slot */
@@ -8105,7 +8106,8 @@ void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg) {
   }
 
   //printf("root thread %d:%d created with %d (0: natively created, 1: reuse previous root, 2: promote a worker to root\n", gtid, state->counter, from_thread_pool );
-  return state;
+  thread = state;
+  return 0;
 
 #if 0
   root_thread = __kmp_allocate_thread(root, root->r.r_root_team, 0); /* will use one from the thread pool or create one */

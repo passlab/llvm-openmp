@@ -3547,7 +3547,7 @@ extern int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int npr, int argc,
 
 /* ------------------------------------------------------------------------ */
 #if REX_KMP_SUPPORT
-KMP_EXPORT void * __kmpc_root_thread_create(void (*func) (void * arg), void * arg);
+KMP_EXPORT int __kmpc_root_thread_create(void *thread, void (*func) (void * arg), void * arg);
 KMP_EXPORT int  __kmpc_root_thread_join(void * thread, void ** retval);
 KMP_EXPORT void __kmpc_root_thread_set_retval(void * retval);
 KMP_EXPORT int __kmpc_native_thread_attach();
