@@ -125,6 +125,30 @@ INLINE void omptarget_nvptx_TaskDescr::CopyConvergentParent(
   items.threadId = tid;
 }
 
+INLINE void omptarget_nvptx_TaskDescr::SaveLoopData() {
+  loopData.loopUpperBound =
+      omptarget_nvptx_threadPrivateContext->LoopUpperBound(items.threadId);
+  loopData.nextLowerBound =
+      omptarget_nvptx_threadPrivateContext->NextLowerBound(items.threadId);
+  loopData.schedule =
+      omptarget_nvptx_threadPrivateContext->ScheduleType(items.threadId);
+  loopData.chunk = omptarget_nvptx_threadPrivateContext->Chunk(items.threadId);
+  loopData.stride =
+      omptarget_nvptx_threadPrivateContext->Stride(items.threadId);
+}
+
+INLINE void omptarget_nvptx_TaskDescr::RestoreLoopData() const {
+  omptarget_nvptx_threadPrivateContext->Chunk(items.threadId) = loopData.chunk;
+  omptarget_nvptx_threadPrivateContext->LoopUpperBound(items.threadId) =
+      loopData.loopUpperBound;
+  omptarget_nvptx_threadPrivateContext->NextLowerBound(items.threadId) =
+      loopData.nextLowerBound;
+  omptarget_nvptx_threadPrivateContext->Stride(items.threadId) =
+      loopData.stride;
+  omptarget_nvptx_threadPrivateContext->ScheduleType(items.threadId) =
+      loopData.schedule;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Thread Private Context
 ////////////////////////////////////////////////////////////////////////////////
@@ -144,21 +168,9 @@ omptarget_nvptx_ThreadPrivateContext::InitThreadPrivateContext(int tid) {
   topTaskDescr[tid] = NULL;
   // no num threads value has been pushed
   nextRegion.tnum[tid] = 0;
-  // priv counter init to zero
-  priv[tid] = 0;
   // the following don't need to be init here; they are init when using dyn
   // sched
   // current_Event, events_Number, chunk, num_Iterations, schedule
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Work Descriptor
-////////////////////////////////////////////////////////////////////////////////
-
-INLINE void omptarget_nvptx_WorkDescr::InitWorkDescr() {
-  cg.Clear(); // start and stop to zero too
-  // threadsInParallelTeam does not need to be init (done in start parallel)
-  hasCancel = FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -167,8 +179,6 @@ INLINE void omptarget_nvptx_WorkDescr::InitWorkDescr() {
 
 INLINE void omptarget_nvptx_TeamDescr::InitTeamDescr() {
   levelZeroTaskDescr.InitLevelZeroTaskDescr();
-  workDescrForActiveParallel.InitWorkDescr();
-  // omp_init_lock(criticalLock);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -191,4 +201,37 @@ INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor(int threadId) {
 
 INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor() {
   return getMyTopTaskDescriptor(GetLogicalThreadIdInBlock());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Lightweight runtime functions.
+////////////////////////////////////////////////////////////////////////////////
+
+// Shared memory buffer for globalization support.
+static __align__(16) __device__ __shared__ char
+    omptarget_static_buffer[DS_Shared_Memory_Size];
+static __device__ __shared__ void *omptarget_spmd_allocated;
+
+extern __device__ __shared__ void *omptarget_nvptx_simpleGlobalData;
+
+INLINE void *
+omptarget_nvptx_SimpleThreadPrivateContext::Allocate(size_t DataSize) {
+  if (DataSize <= DS_Shared_Memory_Size)
+    return ::omptarget_static_buffer;
+  if (DataSize <= sizeof(omptarget_nvptx_ThreadPrivateContext))
+    return ::omptarget_nvptx_simpleGlobalData;
+  if (threadIdx.x == 0)
+    omptarget_spmd_allocated = SafeMalloc(DataSize, "SPMD teams alloc");
+  __syncthreads();
+  return omptarget_spmd_allocated;
+}
+
+INLINE void
+omptarget_nvptx_SimpleThreadPrivateContext::Deallocate(void *Ptr) {
+  if (Ptr != ::omptarget_static_buffer &&
+      Ptr != ::omptarget_nvptx_simpleGlobalData) {
+    __syncthreads();
+    if (threadIdx.x == 0)
+      SafeFree(Ptr, "SPMD teams dealloc");
+  }
 }
