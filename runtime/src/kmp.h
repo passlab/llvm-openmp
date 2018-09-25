@@ -3621,6 +3621,12 @@ extern int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int npr, int argc,
 
 /* ------------------------------------------------------------------------ */
 
+#if REX_KMP_SUPPORT
+KMP_EXPORT int __kmpc_pthread_create(pthread_t *thread, const pthread_attr_t *attr, 
+				void *(*start_routine) (void *), void * arg);
+KMP_EXPORT int __kmpc_cool_threads(int num_threads);
+#endif
+
 KMP_EXPORT void __kmpc_begin(ident_t *, kmp_int32 flags);
 KMP_EXPORT void __kmpc_end(ident_t *);
 

@@ -215,6 +215,8 @@ static void __kmp_linear_barrier_release(
       if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
         return;
 
+      if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
+
       itt_sync_obj = __kmp_itt_barrier_object(gtid, bs_forkjoin_barrier);
       if (itt_sync_obj != NULL)
         // Call prepare as early as possible for "new" barrier
@@ -224,6 +226,8 @@ static void __kmp_linear_barrier_release(
         // Early exit for reaping threads releasing forkjoin barrier
         if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
       return;
+
+    if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
 // The worker thread may now assume that the team is valid.
 #ifdef KMP_DEBUG
     tid = __kmp_tid_from_gtid(gtid);
@@ -384,6 +388,8 @@ static void __kmp_tree_barrier_release(
       if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
         return;
 
+      if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
+
       itt_sync_obj = __kmp_itt_barrier_object(gtid, bs_forkjoin_barrier);
       if (itt_sync_obj != NULL)
         // Call prepare as early as possible for "new" barrier
@@ -393,6 +399,8 @@ static void __kmp_tree_barrier_release(
         // Early exit for reaping threads releasing forkjoin barrier
         if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
       return;
+
+    if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
 
     // The worker thread may now assume that the team is valid.
     team = __kmp_threads[gtid]->th.th_team;
@@ -627,6 +635,7 @@ static void __kmp_hyper_barrier_release(
 
       if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
         return;
+      if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
 
       itt_sync_obj = __kmp_itt_barrier_object(gtid, bs_forkjoin_barrier);
       if (itt_sync_obj != NULL)
@@ -637,6 +646,8 @@ static void __kmp_hyper_barrier_release(
         // Early exit for reaping threads releasing forkjoin barrier
         if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
       return;
+
+    if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
 
     // The worker thread may now assume that the team is valid.
     team = __kmp_threads[gtid]->th.th_team;
@@ -1039,6 +1050,8 @@ static void __kmp_hierarchical_barrier_release(
     // Early exit for reaping threads releasing forkjoin barrier
     if (bt == bs_forkjoin_barrier && TCR_4(__kmp_global.g.g_done))
       return;
+
+    if (this_thr->th.th_team == NULL) return; /* this thread is being reaped */
     // The worker thread may now assume that the team is valid.
     team = __kmp_threads[gtid]->th.th_team;
     KMP_DEBUG_ASSERT(team != NULL);
@@ -1924,6 +1937,11 @@ void __kmp_fork_barrier(int gtid, int tid) {
     }
 #endif /* USE_ITT_BUILD && USE_ITT_NOTIFY */
     KA_TRACE(10, ("__kmp_fork_barrier: T#%d is leaving early\n", gtid));
+    return;
+  }
+
+  if (this_thr->th.th_team == NULL) { /* this thread is being reaped */
+    this_thr->th.th_task_team = NULL;
     return;
   }
 
