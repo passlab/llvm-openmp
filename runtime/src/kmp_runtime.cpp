@@ -7808,52 +7808,70 @@ int __kmpc_pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(
     __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
   }
 
+  //printf("To create one pthread from thread pool\n");
   return pthread_create(thread, attr, start_routine, arg);
 }
 
 /**
- * cool down the threads in the read/hot team by moving them to the thread pool
+ * enpool some threads in the root/hot team by moving them to the thread pool
  * this can only be called from a root thread in a sequential region
- * @num_threads
- * @return
+ * @num_threads num_threads that caller would want to enpool
+ * @return num of threads that is actually enpooled
  */
 int __kmpc_cool_threads(int num_threads) {
   int gtid = __kmp_get_global_thread_id();
   kmp_info_t *thinfo = __kmp_threads[gtid];
   kmp_root_t *root = thinfo->th.th_root;
   kmp_info_t *root_thread = root->r.r_uber_thread;
-//  if (thinfo->th.th_root->r.)
-  if (thinfo == root_thread && __kmp_root[gtid] == root) {
-    /* code copied from reset root */
-    kmp_team_t *root_team = root->r.r_root_team;
-    kmp_team_t *hot_team = root->r.r_hot_team;
-    int n = hot_team->t.t_nproc;
-    int i;
+  kmp_team_t *hot_team = root->r.r_hot_team;
+  int teamsize = hot_team->t.t_nproc;
 
-    KMP_DEBUG_ASSERT(!root->r.r_active);
-
-    //root->r.r_root_team = NULL;
-    //root->r.r_hot_team = NULL;
-    // __kmp_free_team() does not free hot teams, so we have to clear r_hot_team
-    // before call to __kmp_free_team().
-    __kmp_free_team(root, root_team USE_NESTED_HOT_ARG(NULL));
+  /**
+   * TODO: safety check to make sure this is called by root in the sequential region
+   */
+  if (__kmp_init_parallel && (!root->r.r_active)
 #if KMP_NESTED_HOT_TEAMS
-    if (__kmp_hot_teams_max_level >
-        0) { // need to free nested hot teams and their threads if any
-      for (i = 0; i < hot_team->t.t_nproc; ++i) {
-        kmp_info_t *th = hot_team->t.t_threads[i];
-        if (__kmp_hot_teams_max_level > 1) {
-          n += __kmp_free_hot_teams(root, th, 1, __kmp_hot_teams_max_level);
-        }
-        if (th->th.th_hot_teams) {
-          //__kmp_free(th->th.th_hot_teams);
-          //th->th.th_hot_teams = NULL;
-        }
+      && __kmp_hot_teams_max_level && !__kmp_hot_teams_mode
+#endif
+          )
+  {
+    /* from this point, num_threads becomes the variable for the num_threads to stay in the team */
+    if (num_threads < 0 || num_threads > teamsize) num_threads = 1;
+    else num_threads = teamsize - num_threads;
+    int f;
+
+    __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
+
+    // Release the threads to the pool
+    for (f = num_threads; f < teamsize; f++) {
+      KMP_DEBUG_ASSERT(hot_team->t.t_threads[f] != NULL);
+      if (__kmp_tasking_mode != tskm_immediate_exec) {
+        // When decreasing team size, threads no longer in the team should unref
+        // task team.
+        hot_team->t.t_threads[f]->th.th_task_team = NULL;
       }
+      __kmp_free_thread(hot_team->t.t_threads[f]);
+      hot_team->t.t_threads[f] = NULL;
+    }
+    hot_team->t.t_nproc = num_threads;
+#if KMP_NESTED_HOT_TEAMS
+    if (root_thread->th.th_hot_teams) {
+      KMP_DEBUG_ASSERT(hot_team == root_thread->th.th_hot_teams[0].hot_team);
+      root_thread->th.th_hot_teams[0].hot_team_nth = num_threads;
     }
 #endif
-    __kmp_free_team(root, hot_team USE_NESTED_HOT_ARG(NULL));
 
+    __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
+
+    // Update the t_nproc field in the threads that are still active.
+    for (f = 0; f < num_threads; f++) {
+      KMP_DEBUG_ASSERT(hot_team->t.t_threads[f] != NULL);
+      hot_team->t.t_threads[f]->th.th_team_nproc = num_threads;
+    }
+    // Special flag to set as if this is omp_set_num_threads call
+    hot_team->t.t_size_changed = -1;
+    return teamsize - num_threads;
   }
+  return 0;
 }
 #endif
