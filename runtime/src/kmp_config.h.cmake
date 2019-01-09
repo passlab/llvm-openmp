@@ -73,6 +73,8 @@
 #define TSAN_SUPPORT
 #endif
 
+#cmakedefine01 REX_KMP_SUPPORT
+
 // Configured cache line based on architecture
 #if KMP_ARCH_PPC64
 # define CACHE_LINE 128

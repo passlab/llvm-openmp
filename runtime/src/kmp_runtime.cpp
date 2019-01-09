@@ -5628,6 +5628,7 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
 
     /* No tid yet since not part of a team */
     __kmp_fork_barrier(gtid, KMP_GTID_DNE);
+    if (this_thr->th.th_team == NULL) break;
 
 #if OMPT_SUPPORT
     if (ompt_enabled.enabled) {
@@ -7784,3 +7785,75 @@ __kmp_determine_reduction_method(
 kmp_int32 __kmp_get_reduce_method(void) {
   return ((__kmp_entry_thread()->th.th_local.packed_reduction_method) >> 8);
 }
+
+#if REX_KMP_SUPPORT
+int __kmpc_pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void * arg) {
+  if (__kmp_thread_pool) {
+    __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
+    if (__kmp_thread_pool) {
+
+      kmp_info_t *scapegoat = CCAST(kmp_info_t *, __kmp_thread_pool);
+      __kmp_thread_pool = (volatile kmp_info_t *) scapegoat->th.th_next_pool;
+      KMP_DEBUG_ASSERT(scapegoat->th.th_reap_state == KMP_SAFE_TO_REAP);
+      if (scapegoat == __kmp_thread_pool_insert_pt) {
+        __kmp_thread_pool_insert_pt = NULL;
+      }
+      //printf("To release one scapegoad thread from thread pool:%d\n", scapegoat->th.th_info.ds.ds_gtid);
+      TCW_4(scapegoat->th.th_in_pool, FALSE);
+      // Don't touch th_active_in_pool or th_active.
+      // The worker thread adjusts those flags as it sleeps/awakens.
+//      __kmp_thread_pool_nth--;
+      __kmp_reap_thread(scapegoat, 0);
+    }
+    __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
+  }
+
+  return pthread_create(thread, attr, start_routine, arg);
+}
+
+/**
+ * cool down the threads in the read/hot team by moving them to the thread pool
+ * this can only be called from a root thread in a sequential region
+ * @num_threads
+ * @return
+ */
+int __kmpc_cool_threads(int num_threads) {
+  int gtid = __kmp_get_global_thread_id();
+  kmp_info_t *thinfo = __kmp_threads[gtid];
+  kmp_root_t *root = thinfo->th.th_root;
+  kmp_info_t *root_thread = root->r.r_uber_thread;
+//  if (thinfo->th.th_root->r.)
+  if (thinfo == root_thread && __kmp_root[gtid] == root) {
+    /* code copied from reset root */
+    kmp_team_t *root_team = root->r.r_root_team;
+    kmp_team_t *hot_team = root->r.r_hot_team;
+    int n = hot_team->t.t_nproc;
+    int i;
+
+    KMP_DEBUG_ASSERT(!root->r.r_active);
+
+    //root->r.r_root_team = NULL;
+    //root->r.r_hot_team = NULL;
+    // __kmp_free_team() does not free hot teams, so we have to clear r_hot_team
+    // before call to __kmp_free_team().
+    __kmp_free_team(root, root_team USE_NESTED_HOT_ARG(NULL));
+#if KMP_NESTED_HOT_TEAMS
+    if (__kmp_hot_teams_max_level >
+        0) { // need to free nested hot teams and their threads if any
+      for (i = 0; i < hot_team->t.t_nproc; ++i) {
+        kmp_info_t *th = hot_team->t.t_threads[i];
+        if (__kmp_hot_teams_max_level > 1) {
+          n += __kmp_free_hot_teams(root, th, 1, __kmp_hot_teams_max_level);
+        }
+        if (th->th.th_hot_teams) {
+          //__kmp_free(th->th.th_hot_teams);
+          //th->th.th_hot_teams = NULL;
+        }
+      }
+    }
+#endif
+    __kmp_free_team(root, hot_team USE_NESTED_HOT_ARG(NULL));
+
+  }
+}
+#endif
