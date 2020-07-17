@@ -4,10 +4,9 @@
 
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.txt for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -83,53 +82,133 @@ void KMPAffinity::destroy_api() {
   }
 }
 
+#define KMP_ADVANCE_SCAN(scan)                                                 \
+  while (*scan != '\0') {                                                      \
+    scan++;                                                                    \
+  }
+
 // Print the affinity mask to the character array in a pretty format.
+// The format is a comma separated list of non-negative integers or integer
+// ranges: e.g., 1,2,3-5,7,9-15
+// The format can also be the string "{<empty>}" if no bits are set in mask
 char *__kmp_affinity_print_mask(char *buf, int buf_len,
                                 kmp_affin_mask_t *mask) {
+  int start = 0, finish = 0, previous = 0;
+  bool first_range;
+  KMP_ASSERT(buf);
   KMP_ASSERT(buf_len >= 40);
+  KMP_ASSERT(mask);
   char *scan = buf;
   char *end = buf + buf_len - 1;
 
-  // Find first element / check for empty set.
-  int i;
-  i = mask->begin();
-  if (i == mask->end()) {
+  // Check for empty set.
+  if (mask->begin() == mask->end()) {
     KMP_SNPRINTF(scan, end - scan + 1, "{<empty>}");
-    while (*scan != '\0')
-      scan++;
+    KMP_ADVANCE_SCAN(scan);
     KMP_ASSERT(scan <= end);
     return buf;
   }
 
-  KMP_SNPRINTF(scan, end - scan + 1, "{%d", i);
-  while (*scan != '\0')
-    scan++;
-  i++;
-  for (; i != mask->end(); i = mask->next(i)) {
-    if (!KMP_CPU_ISSET(i, mask)) {
-      continue;
+  first_range = true;
+  start = mask->begin();
+  while (1) {
+    // Find next range
+    // [start, previous] is inclusive range of contiguous bits in mask
+    for (finish = mask->next(start), previous = start;
+         finish == previous + 1 && finish != mask->end();
+         finish = mask->next(finish)) {
+      previous = finish;
     }
 
-    // Check for buffer overflow.  A string of the form ",<n>" will have at most
-    // 10 characters, plus we want to leave room to print ",...}" if the set is
-    // too large to print for a total of 15 characters. We already left room for
-    // '\0' in setting end.
-    if (end - scan < 15) {
-      break;
+    // The first range does not need a comma printed before it, but the rest
+    // of the ranges do need a comma beforehand
+    if (!first_range) {
+      KMP_SNPRINTF(scan, end - scan + 1, "%s", ",");
+      KMP_ADVANCE_SCAN(scan);
+    } else {
+      first_range = false;
     }
-    KMP_SNPRINTF(scan, end - scan + 1, ",%-d", i);
-    while (*scan != '\0')
-      scan++;
+    // Range with three or more contiguous bits in the affinity mask
+    if (previous - start > 1) {
+      KMP_SNPRINTF(scan, end - scan + 1, "%d-%d", static_cast<int>(start),
+                   static_cast<int>(previous));
+    } else {
+      // Range with one or two contiguous bits in the affinity mask
+      KMP_SNPRINTF(scan, end - scan + 1, "%d", static_cast<int>(start));
+      KMP_ADVANCE_SCAN(scan);
+      if (previous - start > 0) {
+        KMP_SNPRINTF(scan, end - scan + 1, ",%d", static_cast<int>(previous));
+      }
+    }
+    KMP_ADVANCE_SCAN(scan);
+    // Start over with new start point
+    start = finish;
+    if (start == mask->end())
+      break;
+    // Check for overflow
+    if (end - scan < 2)
+      break;
   }
-  if (i != mask->end()) {
-    KMP_SNPRINTF(scan, end - scan + 1, ",...");
-    while (*scan != '\0')
-      scan++;
-  }
-  KMP_SNPRINTF(scan, end - scan + 1, "}");
-  while (*scan != '\0')
-    scan++;
+
+  // Check for overflow
   KMP_ASSERT(scan <= end);
+  return buf;
+}
+#undef KMP_ADVANCE_SCAN
+
+// Print the affinity mask to the string buffer object in a pretty format
+// The format is a comma separated list of non-negative integers or integer
+// ranges: e.g., 1,2,3-5,7,9-15
+// The format can also be the string "{<empty>}" if no bits are set in mask
+kmp_str_buf_t *__kmp_affinity_str_buf_mask(kmp_str_buf_t *buf,
+                                           kmp_affin_mask_t *mask) {
+  int start = 0, finish = 0, previous = 0;
+  bool first_range;
+  KMP_ASSERT(buf);
+  KMP_ASSERT(mask);
+
+  __kmp_str_buf_clear(buf);
+
+  // Check for empty set.
+  if (mask->begin() == mask->end()) {
+    __kmp_str_buf_print(buf, "%s", "{<empty>}");
+    return buf;
+  }
+
+  first_range = true;
+  start = mask->begin();
+  while (1) {
+    // Find next range
+    // [start, previous] is inclusive range of contiguous bits in mask
+    for (finish = mask->next(start), previous = start;
+         finish == previous + 1 && finish != mask->end();
+         finish = mask->next(finish)) {
+      previous = finish;
+    }
+
+    // The first range does not need a comma printed before it, but the rest
+    // of the ranges do need a comma beforehand
+    if (!first_range) {
+      __kmp_str_buf_print(buf, "%s", ",");
+    } else {
+      first_range = false;
+    }
+    // Range with three or more contiguous bits in the affinity mask
+    if (previous - start > 1) {
+      __kmp_str_buf_print(buf, "%d-%d", static_cast<int>(start),
+                          static_cast<int>(previous));
+    } else {
+      // Range with one or two contiguous bits in the affinity mask
+      __kmp_str_buf_print(buf, "%d", static_cast<int>(start));
+      if (previous - start > 0) {
+        __kmp_str_buf_print(buf, ",%d", static_cast<int>(previous));
+      }
+    }
+    // Start over with new start point
+    start = finish;
+    if (start == mask->end())
+      break;
+  }
   return buf;
 }
 
@@ -378,7 +457,8 @@ static int __kmp_hwloc_get_nobjs_under_obj(hwloc_obj_t obj,
 }
 
 static int __kmp_hwloc_count_children_by_depth(hwloc_topology_t t,
-                                               hwloc_obj_t o, unsigned depth,
+                                               hwloc_obj_t o,
+                                               kmp_hwloc_depth_t depth,
                                                hwloc_obj_t *f) {
   if (o->depth == depth) {
     if (*f == NULL)
@@ -451,7 +531,7 @@ static int __kmp_hwloc_process_obj_core_pu(AddrUnsPair *addrPair,
 static int __kmp_hwloc_check_numa() {
   hwloc_topology_t &tp = __kmp_hwloc_topology;
   hwloc_obj_t hT, hC, hL, hN, hS; // hwloc objects (pointers to)
-  int depth;
+  int depth, l2cache_depth, package_depth;
 
   // Get some PU
   hT = hwloc_get_obj_by_type(tp, HWLOC_OBJ_PU, 0);
@@ -465,12 +545,14 @@ static int __kmp_hwloc_check_numa() {
   if (hN != NULL && hN->depth > hS->depth) {
     __kmp_numa_detected = TRUE; // socket includes node(s)
     if (__kmp_affinity_gran == affinity_gran_node) {
-      __kmp_affinity_gran == affinity_gran_numa;
+      __kmp_affinity_gran = affinity_gran_numa;
     }
   }
 
+  package_depth = hwloc_get_type_depth(tp, HWLOC_OBJ_PACKAGE);
+  l2cache_depth = hwloc_get_cache_type_depth(tp, 2, HWLOC_OBJ_CACHE_UNIFIED);
   // check tile, get object by depth because of multiple caches possible
-  depth = hwloc_get_cache_type_depth(tp, 2, HWLOC_OBJ_CACHE_UNIFIED);
+  depth = (l2cache_depth < package_depth) ? package_depth : l2cache_depth;
   hL = hwloc_get_ancestor_obj_by_depth(tp, depth, hT);
   hC = NULL; // not used, but reset it here just in case
   if (hL != NULL &&
@@ -1886,7 +1968,7 @@ static void __kmp_dispatch_set_hierarchy_values() {
   __kmp_hier_max_units[kmp_hier_layer_e::LAYER_THREAD + 1] =
       nPackages * nCoresPerPkg * __kmp_nThreadsPerCore;
   __kmp_hier_max_units[kmp_hier_layer_e::LAYER_L1 + 1] = __kmp_ncores;
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_WINDOWS)
   if (__kmp_mic_type >= mic3)
     __kmp_hier_max_units[kmp_hier_layer_e::LAYER_L2 + 1] = __kmp_ncores / 2;
   else
@@ -1900,7 +1982,7 @@ static void __kmp_dispatch_set_hierarchy_values() {
   __kmp_hier_threads_per[kmp_hier_layer_e::LAYER_THREAD + 1] = 1;
   __kmp_hier_threads_per[kmp_hier_layer_e::LAYER_L1 + 1] =
       __kmp_nThreadsPerCore;
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_WINDOWS)
   if (__kmp_mic_type >= mic3)
     __kmp_hier_threads_per[kmp_hier_layer_e::LAYER_L2 + 1] =
         2 * __kmp_nThreadsPerCore;
@@ -2937,8 +3019,6 @@ static void __kmp_affinity_process_proclist(kmp_affin_mask_t **out_masks,
   KMP_CPU_FREE(sumMask);
 }
 
-#if OMP_40_ENABLED
-
 /*-----------------------------------------------------------------------------
 Re-parse the OMP_PLACES proc id list, forming the newMasks for the different
 places.  Again, Here is the grammar:
@@ -2959,7 +3039,6 @@ signed := num
 signed := + signed
 signed := - signed
 -----------------------------------------------------------------------------*/
-
 static void __kmp_process_subplace_list(const char **scan,
                                         kmp_affin_mask_t *osId2Mask,
                                         int maxOsId, kmp_affin_mask_t *tempMask,
@@ -3277,8 +3356,6 @@ void __kmp_affinity_process_placelist(kmp_affin_mask_t **out_masks,
   }
   KMP_CPU_INTERNAL_FREE_ARRAY(newMasks, numNewMasks);
 }
-
-#endif /* OMP_40_ENABLED */
 
 #undef ADD_MASK
 #undef ADD_MASK_OSID
@@ -4404,27 +4481,22 @@ static void __kmp_aux_affinity_initialize(void) {
 
   case affinity_explicit:
     KMP_DEBUG_ASSERT(__kmp_affinity_proclist != NULL);
-#if OMP_40_ENABLED
-    if (__kmp_nested_proc_bind.bind_types[0] == proc_bind_intel)
-#endif
-    {
+    if (__kmp_nested_proc_bind.bind_types[0] == proc_bind_intel) {
       __kmp_affinity_process_proclist(
           &__kmp_affinity_masks, &__kmp_affinity_num_masks,
           __kmp_affinity_proclist, osId2Mask, maxIndex);
-    }
-#if OMP_40_ENABLED
-    else {
+    } else {
       __kmp_affinity_process_placelist(
           &__kmp_affinity_masks, &__kmp_affinity_num_masks,
           __kmp_affinity_proclist, osId2Mask, maxIndex);
     }
-#endif
     if (__kmp_affinity_num_masks == 0) {
       if (__kmp_affinity_verbose ||
           (__kmp_affinity_warnings && (__kmp_affinity_type != affinity_none))) {
         KMP_WARNING(AffNoValidProcID);
       }
       __kmp_affinity_type = affinity_none;
+      __kmp_create_affinity_none_places();
       return;
     }
     break;
@@ -4477,11 +4549,9 @@ static void __kmp_aux_affinity_initialize(void) {
         KMP_WARNING(AffBalancedNotAvail, "KMP_AFFINITY");
       }
       __kmp_affinity_type = affinity_none;
+      __kmp_create_affinity_none_places();
       return;
-    } else if (__kmp_affinity_uniform_topology()) {
-      break;
-    } else { // Non-uniform topology
-
+    } else if (!__kmp_affinity_uniform_topology()) {
       // Save the depth for further usage
       __kmp_aff_depth = depth;
 
@@ -4522,8 +4592,9 @@ static void __kmp_aux_affinity_initialize(void) {
 
         procarr[core * maxprocpercore + inlastcore] = proc;
       }
-
-      break;
+    }
+    if (__kmp_affinity_compact >= depth) {
+      __kmp_affinity_compact = depth - 1;
     }
 
   sortAddresses:
@@ -4534,13 +4605,11 @@ static void __kmp_aux_affinity_initialize(void) {
       __kmp_affinity_num_masks = numUnique;
     }
 
-#if OMP_40_ENABLED
     if ((__kmp_nested_proc_bind.bind_types[0] != proc_bind_intel) &&
         (__kmp_affinity_num_places > 0) &&
         ((unsigned)__kmp_affinity_num_places < __kmp_affinity_num_masks)) {
       __kmp_affinity_num_masks = __kmp_affinity_num_places;
     }
-#endif
 
     KMP_CPU_ALLOC_ARRAY(__kmp_affinity_masks, __kmp_affinity_num_masks);
 
@@ -4610,9 +4679,7 @@ void __kmp_affinity_uninitialize(void) {
   }
   __kmp_affinity_num_masks = 0;
   __kmp_affinity_type = affinity_default;
-#if OMP_40_ENABLED
   __kmp_affinity_num_places = 0;
-#endif
   if (__kmp_affinity_proclist != NULL) {
     __kmp_free(__kmp_affinity_proclist);
     __kmp_affinity_proclist = NULL;
@@ -4653,10 +4720,7 @@ void __kmp_affinity_set_init_mask(int gtid, int isa_root) {
   kmp_affin_mask_t *mask;
   int i;
 
-#if OMP_40_ENABLED
-  if (KMP_AFFINITY_NON_PROC_BIND)
-#endif
-  {
+  if (KMP_AFFINITY_NON_PROC_BIND) {
     if ((__kmp_affinity_type == affinity_none) ||
         (__kmp_affinity_type == affinity_balanced)) {
 #if KMP_GROUP_AFFINITY
@@ -4672,9 +4736,7 @@ void __kmp_affinity_set_init_mask(int gtid, int isa_root) {
       i = (gtid + __kmp_affinity_offset) % __kmp_affinity_num_masks;
       mask = KMP_CPU_INDEX(__kmp_affinity_masks, i);
     }
-  }
-#if OMP_40_ENABLED
-  else {
+  } else {
     if ((!isa_root) ||
         (__kmp_nested_proc_bind.bind_types[0] == proc_bind_false)) {
 #if KMP_GROUP_AFFINITY
@@ -4693,12 +4755,15 @@ void __kmp_affinity_set_init_mask(int gtid, int isa_root) {
       mask = KMP_CPU_INDEX(__kmp_affinity_masks, i);
     }
   }
-#endif
 
-#if OMP_40_ENABLED
   th->th.th_current_place = i;
   if (isa_root) {
     th->th.th_new_place = i;
+    th->th.th_first_place = 0;
+    th->th.th_last_place = __kmp_affinity_num_masks - 1;
+  } else if (KMP_AFFINITY_NON_PROC_BIND) {
+    // When using a Non-OMP_PROC_BIND affinity method,
+    // set all threads' place-partition-var to the entire place list
     th->th.th_first_place = 0;
     th->th.th_last_place = __kmp_affinity_num_masks - 1;
   }
@@ -4710,17 +4775,6 @@ void __kmp_affinity_set_init_mask(int gtid, int isa_root) {
     KA_TRACE(100, ("__kmp_affinity_set_init_mask: binding T#%d to place %d\n",
                    gtid, i));
   }
-#else
-  if (i == -1) {
-    KA_TRACE(
-        100,
-        ("__kmp_affinity_set_init_mask: binding T#%d to __kmp_affin_fullMask\n",
-         gtid));
-  } else {
-    KA_TRACE(100, ("__kmp_affinity_set_init_mask: binding T#%d to mask %d\n",
-                   gtid, i));
-  }
-#endif /* OMP_40_ENABLED */
 
   KMP_CPU_COPY(th->th.th_affin_mask, mask);
 
@@ -4745,8 +4799,6 @@ void __kmp_affinity_set_init_mask(int gtid, int isa_root) {
 #endif
     __kmp_set_system_affinity(th->th.th_affin_mask, TRUE);
 }
-
-#if OMP_40_ENABLED
 
 void __kmp_affinity_set_place(int gtid) {
   if (!KMP_AFFINITY_CAPABLE()) {
@@ -4788,8 +4840,6 @@ void __kmp_affinity_set_place(int gtid) {
   __kmp_set_system_affinity(th->th.th_affin_mask, TRUE);
 }
 
-#endif /* OMP_40_ENABLED */
-
 int __kmp_aux_set_affinity(void **mask) {
   int gtid;
   kmp_info_t *th;
@@ -4800,7 +4850,7 @@ int __kmp_aux_set_affinity(void **mask) {
   }
 
   gtid = __kmp_entry_gtid();
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
                               (kmp_affin_mask_t *)(*mask));
@@ -4844,7 +4894,6 @@ int __kmp_aux_set_affinity(void **mask) {
     KMP_CPU_COPY(th->th.th_affin_mask, (kmp_affin_mask_t *)(*mask));
   }
 
-#if OMP_40_ENABLED
   th->th.th_current_place = KMP_PLACE_UNDEFINED;
   th->th.th_new_place = KMP_PLACE_UNDEFINED;
   th->th.th_first_place = 0;
@@ -4852,7 +4901,6 @@ int __kmp_aux_set_affinity(void **mask) {
 
   // Turn off 4.0 affinity for the current tread at this parallel level.
   th->th.th_current_task->td_icvs.proc_bind = proc_bind_false;
-#endif
 
   return retval;
 }
@@ -4870,7 +4918,7 @@ int __kmp_aux_get_affinity(void **mask) {
   th = __kmp_threads[gtid];
   KMP_DEBUG_ASSERT(th->th.th_affin_mask != NULL);
 
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
                               th->th.th_affin_mask);
@@ -4887,7 +4935,7 @@ int __kmp_aux_get_affinity(void **mask) {
 #if !KMP_OS_WINDOWS
 
   retval = __kmp_get_system_affinity((kmp_affin_mask_t *)(*mask), FALSE);
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
                               (kmp_affin_mask_t *)(*mask));
@@ -4921,7 +4969,7 @@ int __kmp_aux_set_affinity_mask_proc(int proc, void **mask) {
     return -1;
   }
 
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     int gtid = __kmp_entry_gtid();
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
@@ -4953,7 +5001,7 @@ int __kmp_aux_unset_affinity_mask_proc(int proc, void **mask) {
     return -1;
   }
 
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     int gtid = __kmp_entry_gtid();
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
@@ -4985,7 +5033,7 @@ int __kmp_aux_get_affinity_mask_proc(int proc, void **mask) {
     return -1;
   }
 
-  KA_TRACE(1000, ; {
+  KA_TRACE(1000, (""); {
     int gtid = __kmp_entry_gtid();
     char buf[KMP_AFFIN_MASK_PRINT_LEN];
     __kmp_affinity_print_mask(buf, KMP_AFFIN_MASK_PRINT_LEN,
@@ -5012,8 +5060,10 @@ int __kmp_aux_get_affinity_mask_proc(int proc, void **mask) {
 }
 
 // Dynamic affinity settings - Affinity balanced
-void __kmp_balanced_affinity(int tid, int nthreads) {
+void __kmp_balanced_affinity(kmp_info_t *th, int nthreads) {
+  KMP_DEBUG_ASSERT(th);
   bool fine_gran = true;
+  int tid = th->th.th_info.ds.ds_tid;
 
   switch (__kmp_affinity_gran) {
   case affinity_gran_fine:
@@ -5061,8 +5111,7 @@ void __kmp_balanced_affinity(int tid, int nthreads) {
     KMP_DEBUG_ASSERT2(KMP_AFFINITY_CAPABLE(),
                       "Illegal set affinity operation when not capable");
 
-    kmp_affin_mask_t *mask;
-    KMP_CPU_ALLOC_ON_STACK(mask);
+    kmp_affin_mask_t *mask = th->th.th_affin_mask;
     KMP_CPU_ZERO(mask);
 
     if (fine_gran) {
@@ -5082,11 +5131,9 @@ void __kmp_balanced_affinity(int tid, int nthreads) {
                  __kmp_gettid(), tid, buf);
     }
     __kmp_set_system_affinity(mask, TRUE);
-    KMP_CPU_FREE_FROM_STACK(mask);
   } else { // Non-uniform topology
 
-    kmp_affin_mask_t *mask;
-    KMP_CPU_ALLOC_ON_STACK(mask);
+    kmp_affin_mask_t *mask = th->th.th_affin_mask;
     KMP_CPU_ZERO(mask);
 
     int core_level = __kmp_affinity_find_core_level(
@@ -5250,7 +5297,6 @@ void __kmp_balanced_affinity(int tid, int nthreads) {
                  __kmp_gettid(), tid, buf);
     }
     __kmp_set_system_affinity(mask, TRUE);
-    KMP_CPU_FREE_FROM_STACK(mask);
   }
 }
 
