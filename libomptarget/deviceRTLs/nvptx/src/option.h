@@ -1,9 +1,8 @@
 //===------------ option.h - NVPTX OpenMP GPU options ------------ CUDA -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.txt for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 #ifndef _OPTION_H_
 #define _OPTION_H_
+
+#include "interface.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kernel options
@@ -45,6 +46,8 @@
 #define MAX_SM 16
 #endif
 
+#define OMP_ACTIVE_PARALLEL_LEVEL 128
+
 ////////////////////////////////////////////////////////////////////////////////
 // algo options
 ////////////////////////////////////////////////////////////////////////////////
@@ -53,8 +56,7 @@
 // misc options (by def everythig here is device)
 ////////////////////////////////////////////////////////////////////////////////
 
-#define EXTERN extern "C" __device__
-#define INLINE __inline__ __device__
+#define INLINE __forceinline__ __device__
 #define NOINLINE __noinline__ __device__
 #ifndef TRUE
 #define TRUE 1

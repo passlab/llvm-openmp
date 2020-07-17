@@ -1,9 +1,8 @@
 //===---- omptarget-nvptxi.h - NVPTX OpenMP GPU initialization --- CUDA -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.txt for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,7 +15,7 @@
 // Task Descriptor
 ////////////////////////////////////////////////////////////////////////////////
 
-INLINE omp_sched_t omptarget_nvptx_TaskDescr::GetRuntimeSched() {
+INLINE omp_sched_t omptarget_nvptx_TaskDescr::GetRuntimeSched() const {
   // sched starts from 1..4; encode it as 0..3; so add 1 here
   uint8_t rc = (items.flags & TaskDescr_SchedMask) + 1;
   return (omp_sched_t)rc;
@@ -31,7 +30,8 @@ INLINE void omptarget_nvptx_TaskDescr::SetRuntimeSched(omp_sched_t sched) {
   items.flags |= val;
 }
 
-INLINE void omptarget_nvptx_TaskDescr::InitLevelZeroTaskDescr() {
+INLINE void
+omptarget_nvptx_TaskDescr::InitLevelZeroTaskDescr() {
   // slow method
   // flag:
   //   default sched is static,
@@ -39,17 +39,14 @@ INLINE void omptarget_nvptx_TaskDescr::InitLevelZeroTaskDescr() {
   //   not in parallel
 
   items.flags = 0;
-  items.nthreads = GetNumberOfProcsInTeam();
-  ;                                // threads: whatever was alloc by kernel
   items.threadId = 0;         // is master
-  items.threadsInTeam = 1;    // sequential
   items.runtimeChunkSize = 1; // prefered chunking statik with chunk 1
 }
 
 // This is called when all threads are started together in SPMD mode.
 // OMP directives include target parallel, target distribute parallel for, etc.
 INLINE void omptarget_nvptx_TaskDescr::InitLevelOneTaskDescr(
-    uint16_t tnum, omptarget_nvptx_TaskDescr *parentTaskDescr) {
+    omptarget_nvptx_TaskDescr *parentTaskDescr) {
   // slow method
   // flag:
   //   default sched is static,
@@ -58,10 +55,8 @@ INLINE void omptarget_nvptx_TaskDescr::InitLevelOneTaskDescr(
 
   items.flags =
       TaskDescr_InPar | TaskDescr_IsParConstr; // set flag to parallel
-  items.nthreads = 0; // # threads for subsequent parallel region
   items.threadId =
       GetThreadIdInBlock(); // get ids from cuda (only called for 1st level)
-  items.threadsInTeam = tnum;
   items.runtimeChunkSize = 1; // prefered chunking statik with chunk 1
   prev = parentTaskDescr;
 }
@@ -91,12 +86,11 @@ INLINE void omptarget_nvptx_TaskDescr::CopyForExplicitTask(
 }
 
 INLINE void omptarget_nvptx_TaskDescr::CopyToWorkDescr(
-    omptarget_nvptx_TaskDescr *masterTaskDescr, uint16_t tnum) {
+    omptarget_nvptx_TaskDescr *masterTaskDescr) {
   CopyParent(masterTaskDescr);
   // overrwrite specific items;
   items.flags |=
       TaskDescr_InPar | TaskDescr_IsParConstr; // set flag to parallel
-  items.threadsInTeam = tnum;             // set number of threads
 }
 
 INLINE void omptarget_nvptx_TaskDescr::CopyFromWorkDescr(
@@ -121,7 +115,6 @@ INLINE void omptarget_nvptx_TaskDescr::CopyConvergentParent(
     omptarget_nvptx_TaskDescr *parentTaskDescr, uint16_t tid, uint16_t tnum) {
   CopyParent(parentTaskDescr);
   items.flags |= TaskDescr_InParL2P; // In L2+ parallelism
-  items.threadsInTeam = tnum;        // set number of threads
   items.threadId = tid;
 }
 
@@ -154,7 +147,7 @@ INLINE void omptarget_nvptx_TaskDescr::RestoreLoopData() const {
 ////////////////////////////////////////////////////////////////////////////////
 
 INLINE omptarget_nvptx_TaskDescr *
-omptarget_nvptx_ThreadPrivateContext::GetTopLevelTaskDescr(int tid) {
+omptarget_nvptx_ThreadPrivateContext::GetTopLevelTaskDescr(int tid) const {
   ASSERT0(
       LT_FUSSY, tid < MAX_THREADS_PER_TEAM,
       "Getting top level, tid is larger than allocated data structure size");
@@ -199,39 +192,35 @@ INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor(int threadId) {
   return omptarget_nvptx_threadPrivateContext->GetTopLevelTaskDescr(threadId);
 }
 
-INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor() {
-  return getMyTopTaskDescriptor(GetLogicalThreadIdInBlock());
+INLINE omptarget_nvptx_TaskDescr *
+getMyTopTaskDescriptor(bool isSPMDExecutionMode) {
+  return getMyTopTaskDescriptor(GetLogicalThreadIdInBlock(isSPMDExecutionMode));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Lightweight runtime functions.
+// Memory management runtime functions.
 ////////////////////////////////////////////////////////////////////////////////
 
-// Shared memory buffer for globalization support.
-static __align__(16) __device__ __shared__ char
-    omptarget_static_buffer[DS_Shared_Memory_Size];
-static __device__ __shared__ void *omptarget_spmd_allocated;
-
-extern __device__ __shared__ void *omptarget_nvptx_simpleGlobalData;
-
-INLINE void *
-omptarget_nvptx_SimpleThreadPrivateContext::Allocate(size_t DataSize) {
-  if (DataSize <= DS_Shared_Memory_Size)
-    return ::omptarget_static_buffer;
-  if (DataSize <= sizeof(omptarget_nvptx_ThreadPrivateContext))
-    return ::omptarget_nvptx_simpleGlobalData;
-  if (threadIdx.x == 0)
-    omptarget_spmd_allocated = SafeMalloc(DataSize, "SPMD teams alloc");
-  __syncthreads();
-  return omptarget_spmd_allocated;
+INLINE void omptarget_nvptx_SimpleMemoryManager::Release() {
+  ASSERT0(LT_FUSSY, usedSlotIdx < MAX_SM,
+          "SlotIdx is too big or uninitialized.");
+  ASSERT0(LT_FUSSY, usedMemIdx < OMP_STATE_COUNT,
+          "MemIdx is too big or uninitialized.");
+  MemDataTy &MD = MemData[usedSlotIdx];
+  atomicExch((unsigned *)&MD.keys[usedMemIdx], 0);
 }
 
-INLINE void
-omptarget_nvptx_SimpleThreadPrivateContext::Deallocate(void *Ptr) {
-  if (Ptr != ::omptarget_static_buffer &&
-      Ptr != ::omptarget_nvptx_simpleGlobalData) {
-    __syncthreads();
-    if (threadIdx.x == 0)
-      SafeFree(Ptr, "SPMD teams dealloc");
+INLINE const void *omptarget_nvptx_SimpleMemoryManager::Acquire(const void *buf,
+                                                                size_t size) {
+  ASSERT0(LT_FUSSY, usedSlotIdx < MAX_SM,
+          "SlotIdx is too big or uninitialized.");
+  const unsigned sm = usedSlotIdx;
+  MemDataTy &MD = MemData[sm];
+  unsigned i = hash(GetBlockIdInKernel());
+  while (atomicCAS((unsigned *)&MD.keys[i], 0, 1) != 0) {
+    i = hash(i + 1);
   }
+  usedSlotIdx = sm;
+  usedMemIdx = i;
+  return static_cast<const char *>(buf) + (sm * OMP_STATE_COUNT + i) * size;
 }
