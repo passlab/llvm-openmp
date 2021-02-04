@@ -15,40 +15,9 @@ endif()
 # Add cmake directory to search for custom cmake functions
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
-# Standalone build or part of LLVM?
-set(LIBOMP_STANDALONE_BUILD FALSE)
-if(OPENMP_STANDALONE_BUILD OR
-   "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" OR
-   "${CMAKE_SOURCE_DIR}/runtime" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-  set(LIBOMP_STANDALONE_BUILD TRUE)
-endif()
-
-if(${LIBOMP_STANDALONE_BUILD})
-  project(libomp C CXX)
-endif()
-
 # Set libomp version
 set(LIBOMP_VERSION_MAJOR 5)
 set(LIBOMP_VERSION_MINOR 0)
-
-# Set rex version
-# for full REX support
-if(${LIBOMP_REX_SUPPORT})
-  set(REX_VERSION_MAJOR 0)
-  set(REX_VERSION_MINOR 1)
-  set(LIBOMP_REX_SUPPORT TRUE)
-else()
-  set(LIBOMP_REX_SUPPORT FALSE)
-endif()
-
-# for REX OpenMP Interoperability support
-if(${LIBOMP_REX_OMPITROP_SUPPORT})
-  set(REX_VERSION_MAJOR 0)
-  set(REX_VERSION_MINOR 1)
-  set(LIBOMP_REX_OMPITROP_SUPPORT TRUE)
-else()
-  set(LIBOMP_REX_OMPITROP_SUPPORT FALSE)
-endif()
 
 # These include files are in the cmake/ subdirectory
 include(LibompUtils)
@@ -102,7 +71,7 @@ libomp_check_variable(LIBOMP_ARCH 32e x86_64 32 i386 arm ppc64 ppc64le aarch64 m
 set(LIBOMP_LIB_TYPE normal CACHE STRING
   "Performance,Profiling,Stubs library (normal/profile/stubs)")
 libomp_check_variable(LIBOMP_LIB_TYPE normal profile stubs)
-# Set the OpenMP Year and Month assiociated with version
+# Set the OpenMP Year and Month associated with version
 set(LIBOMP_OMP_YEAR_MONTH 201611)
 set(LIBOMP_MIC_ARCH knc CACHE STRING
   "Intel(R) Many Integrated Core Architecture (Intel(R) MIC Architecture) (knf/knc).  Ignored if not Intel(R) MIC Architecture build.")
@@ -407,13 +376,11 @@ if(${OPENMP_STANDALONE_BUILD})
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")
   libomp_say("Use TSAN-support     -- ${LIBOMP_TSAN_SUPPORT}")
   libomp_say("Use Hwloc library    -- ${LIBOMP_USE_HWLOC}")
-  libomp_say("REX runtime support  -- ${LIBOMP_REX_SUPPORT}")
-  libomp_say("REX KMP API support  -- ${LIBOMP_REX_KMPAPI_SUPPORT}")
-  libomp_say("REX OMPITROP support -- ${LIBOMP_REX_OMPITROP_SUPPORT}")
-  if(${LIBOMP_REX_SUPPORT} OR ${LIBOMP_REX_KMPAPI_SUPPORT})
-    libomp_say("REX Version          -- ${REX_VERSION_MAJOR}.${REX_VERSION_MINOR}")
-  endif()
 endif()
 
 add_subdirectory(src)
 add_subdirectory(test)
+
+# make these variables available for tools:
+set(LIBOMP_LIBRARY_DIR ${LIBOMP_LIBRARY_DIR} PARENT_SCOPE)
+set(LIBOMP_INCLUDE_DIR ${LIBOMP_INCLUDE_DIR} PARENT_SCOPE)

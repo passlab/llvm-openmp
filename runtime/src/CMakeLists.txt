@@ -14,9 +14,6 @@ configure_file(kmp_config.h.cmake kmp_config.h @ONLY)
 if(${LIBOMP_OMPT_SUPPORT})
   configure_file(${LIBOMP_INC_DIR}/omp-tools.h.var omp-tools.h @ONLY)
 endif()
-if(${LIBOMP_REX_SUPPORT})
-  configure_file(${LIBOMP_SRC_DIR}/rex.h rex.h @ONLY)
-endif()
 
 # Generate message catalog files: kmp_i18n_id.inc and kmp_i18n_default.inc
 add_custom_command(
@@ -108,16 +105,6 @@ libomp_append(LIBOMP_CXXFILES kmp_ftn_extra.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_version.cpp)
 libomp_append(LIBOMP_CXXFILES ompt-general.cpp IF_TRUE LIBOMP_OMPT_SUPPORT)
 libomp_append(LIBOMP_CXXFILES tsan_annotations.cpp IF_TRUE LIBOMP_TSAN_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_runtime.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_grid_topology.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_devices.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_dev_thsim.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_dev_hostcpu.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_dev_nvcuda.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_dev_micomp.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_datamap.cpp IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_thirdparty/iniparser.c IF_TRUE LIBOMP_REX_SUPPORT)
-libomp_append(LIBOMP_CXXFILES rex_thirdparty/dictionary.c IF_TRUE LIBOMP_REX_SUPPORT)
 
 set(LIBOMP_SOURCE_FILES ${LIBOMP_CXXFILES} ${LIBOMP_ASMFILES})
 # For Windows, there is a resource file (.rc -> .res) that is also compiled
@@ -166,6 +153,7 @@ if(NOT LIBOMP_LIBRARY_DIR)
 else()
   set(LIBOMP_LIBRARY_DIR ${LIBOMP_LIBRARY_DIR} PARENT_SCOPE)
 endif()
+set(LIBOMP_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)
 
 # Add symbolic links to libomp
 if(NOT WIN32)
@@ -195,7 +183,7 @@ if(WIN32)
   add_custom_target(libomp-needed-windows-files DEPENDS ${LIBOMP_LIB_NAME}.def)
   add_dependencies(omp libomp-needed-windows-files)
   # z_Windows_NT-586_asm.asm requires definitions to be sent via command line
-  # It only needs the architecutre macro and OMPT_SUPPORT=0|1
+  # It only needs the architecture macro and OMPT_SUPPORT=0|1
   libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_IA32" IF_TRUE IA32)
   libomp_append(LIBOMP_MASM_DEFINITIONS "-D_M_AMD64" IF_TRUE INTEL64)
   libomp_append(LIBOMP_MASM_DEFINITIONS "-DOMPT_SUPPORT" IF_TRUE_1_0 LIBOMP_OMPT_SUPPORT)
@@ -207,28 +195,34 @@ if(WIN32)
   # the import library is "re-linked" to include kmp_import.cpp which prevents
   # linking of both Visual Studio OpenMP and newly built OpenMP
   set_source_files_properties(kmp_import.cpp PROPERTIES COMPILE_FLAGS "${LIBOMP_CONFIGURED_CXXFLAGS}")
-  set(LIBOMP_IMP_LIB_FILE ${LIBOMP_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
+  set(LIBOMP_IMP_LIB_FILE ${LIBOMP_LIB_NAME}${CMAKE_IMPORT_LIBRARY_SUFFIX})
   set(LIBOMP_GENERATED_IMP_LIB_FILENAME ${LIBOMP_LIB_FILE}${CMAKE_STATIC_LIBRARY_SUFFIX})
   set_target_properties(omp PROPERTIES
     VERSION ${LIBOMP_VERSION_MAJOR}.${LIBOMP_VERSION_MINOR} # uses /version flag
     IMPORT_PREFIX "" IMPORT_SUFFIX "" # control generated import library name when building omp
     ARCHIVE_OUTPUT_NAME ${LIBOMP_GENERATED_IMP_LIB_FILENAME}
   )
-  # Get generated import library from creating omp
-  get_target_property(LIBOMP_IMPORT_LIB_DIRECTORY omp ARCHIVE_OUTPUT_DIRECTORY)
-  if(LIBOMP_IMPORT_LIB_DIRECTORY)
-    set(LIBOMP_GENERATED_IMP_LIB ${LIBOMP_IMPORT_LIB_DIRECTORY}/${LIBOMP_GENERATED_IMP_LIB_FILENAME})
+
+  if(MSVC)
+    # Get generated import library from creating omp
+    get_target_property(LIBOMP_IMPORT_LIB_DIRECTORY omp ARCHIVE_OUTPUT_DIRECTORY)
+    if(LIBOMP_IMPORT_LIB_DIRECTORY)
+      set(LIBOMP_GENERATED_IMP_LIB ${LIBOMP_IMPORT_LIB_DIRECTORY}/${LIBOMP_GENERATED_IMP_LIB_FILENAME})
+    else()
+      set(LIBOMP_GENERATED_IMP_LIB ${CMAKE_CURRENT_BINARY_DIR}/${LIBOMP_GENERATED_IMP_LIB_FILENAME})
+    endif()
+    set_source_files_properties(${LIBOMP_GENERATED_IMP_LIB} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+    # Create new import library that is just the previously created one + kmp_import.cpp
+    add_library(ompimp STATIC ${LIBOMP_GENERATED_IMP_LIB} kmp_import.cpp)
+    set_target_properties(ompimp PROPERTIES
+      PREFIX "" SUFFIX "" OUTPUT_NAME "${LIBOMP_IMP_LIB_FILE}"
+      LINKER_LANGUAGE C
+    )
+    add_dependencies(ompimp omp) # ensure generated import library is created first
+    set(LIBOMP_IMP_LIB_TARGET ompimp)
   else()
-    set(LIBOMP_GENERATED_IMP_LIB ${CMAKE_CURRENT_BINARY_DIR}/${LIBOMP_GENERATED_IMP_LIB_FILENAME})
+    set(LIBOMP_IMP_LIB_TARGET omp)
   endif()
-  set_source_files_properties(${LIBOMP_GENERATED_IMP_LIB} PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
-  # Create new import library that is just the previously created one + kmp_import.cpp
-  add_library(ompimp STATIC ${LIBOMP_GENERATED_IMP_LIB} kmp_import.cpp)
-  set_target_properties(ompimp PROPERTIES
-    PREFIX "" SUFFIX "" OUTPUT_NAME "${LIBOMP_IMP_LIB_FILE}"
-    LINKER_LANGUAGE C
-  )
-  add_dependencies(ompimp omp) # ensure generated import library is created first
 
   # Create def file to designate exported functions
   libomp_get_gdflags(LIBOMP_GDFLAGS) # generate-def.pl flags (Windows only)
@@ -302,7 +296,7 @@ else()
 endif()
 if(WIN32)
   install(TARGETS omp RUNTIME DESTINATION bin)
-  install(TARGETS ompimp ARCHIVE DESTINATION "${OPENMP_INSTALL_LIBDIR}")
+  install(TARGETS ${LIBOMP_IMP_LIB_TARGET} ARCHIVE DESTINATION "${OPENMP_INSTALL_LIBDIR}")
   # Create aliases (regular copies) of the library for backwards compatibility
   set(LIBOMP_ALIASES "libiomp5md")
   foreach(alias IN LISTS LIBOMP_ALIASES)
@@ -334,9 +328,6 @@ if(${LIBOMP_OMPT_SUPPORT})
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/omp-tools.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
   # install under legacy name ompt.h
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/omp-tools.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH} RENAME ompt.h)
-endif()
-if(${LIBOMP_REX_SUPPORT})
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rex.h DESTINATION ${LIBOMP_HEADERS_INSTALL_PATH})
 endif()
 if(${LIBOMP_FORTRAN_MODULES})
   install(FILES

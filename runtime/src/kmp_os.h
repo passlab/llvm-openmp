@@ -313,7 +313,7 @@ extern "C" {
 #  define KMP_FALLTHROUGH() [[fallthrough]]
 #elif __has_cpp_attribute(clang::fallthrough)
 #  define KMP_FALLTHROUGH() [[clang::fallthrough]]
-#elif __has_attribute(fallthough) || __GNUC__ >= 7
+#elif __has_attribute(fallthrough) || __GNUC__ >= 7
 #  define KMP_FALLTHROUGH() __attribute__((__fallthrough__))
 #else
 #  define KMP_FALLTHROUGH() ((void)0)
@@ -338,10 +338,16 @@ extern "C" {
 #define KMP_ALIAS(alias_of) __attribute__((alias(alias_of)))
 #endif
 
-#if KMP_HAVE_WEAK_ATTRIBUTE
-#define KMP_WEAK_ATTRIBUTE __attribute__((weak))
+#if KMP_HAVE_WEAK_ATTRIBUTE && !KMP_DYNAMIC_LIB
+#define KMP_WEAK_ATTRIBUTE_EXTERNAL __attribute__((weak))
 #else
-#define KMP_WEAK_ATTRIBUTE /* Nothing */
+#define KMP_WEAK_ATTRIBUTE_EXTERNAL /* Nothing */
+#endif
+
+#if KMP_HAVE_WEAK_ATTRIBUTE
+#define KMP_WEAK_ATTRIBUTE_INTERNAL __attribute__((weak))
+#else
+#define KMP_WEAK_ATTRIBUTE_INTERNAL /* Nothing */
 #endif
 
 // Define KMP_VERSION_SYMBOL and KMP_EXPAND_NAME

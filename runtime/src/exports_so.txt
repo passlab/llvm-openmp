@@ -38,9 +38,6 @@ VERSION {
 
         _You_must_link_with_*;     # Mutual detection/MS compatibility symbols.
 
-#if REX_SUPPORT
-        rex_*;     # rex.h exported symbols for rex runtime
-#endif
         #
         # Debugger support.
         #
@@ -122,5 +119,7 @@ GOMP_4.0 {
 } GOMP_3.0;
 GOMP_4.5 {
 } GOMP_4.0;
+GOMP_5.0 {
+} GOMP_4.5;
 
 # end of file #
